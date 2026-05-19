@@ -134,7 +134,12 @@ export default function App() {
   useEffect(() => {
     fetch("/api/config")
       .then(res => res.json())
-      .then(data => setConfig(data))
+      .then(data => {
+        setConfig(data);
+        if (data.appName) {
+          document.title = data.appName;
+        }
+      })
       .catch(err => console.error("Config fetch failed:", err));
   }, []);
 
@@ -503,6 +508,11 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
       if (type === 'public') {
         // 公开分享：支持文本粘贴或选择单个文本文件
         if (files.length > 0) {
+          if (files[0].size > 2 * 1024 * 1024) {
+            setError("公开文本文件不能超过 2MB");
+            setLoading(false);
+            return;
+          }
           fd.append('file', files[0]);
         } else {
           fd.append('title', title);
@@ -510,18 +520,38 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
         }
       } else {
         // 私密柜：支持多文件并行上传
-        files.forEach(f => fd.append('files', f));
+        let totalSize = 0;
+        files.forEach(f => {
+          totalSize += f.size;
+          fd.append('files', f);
+        });
+
+        const limitBytes = (parseInt(maxZip) || 50) * 1024 * 1024;
+        if (totalSize > limitBytes) {
+           setError(`总文件体积 (${(totalSize / 1024 / 1024).toFixed(1)}MB) 超出限制 ${maxZip}MB`);
+           setLoading(false);
+           return;
+        }
+
         fd.append('duration', duration);
       }
       const res = await fetch(`/api/upload/${type}`, { method: 'POST', body: fd });
       const data = await res.json();
       if (data.success) {
         setResult(data);
+        setShowQr(true); // 默认展示二维码，方便扫码
         onSuccess();
       }
-      else setError(data.error || "UPL_FAILURE");
+      else {
+        // 针对不同错误码给出友好提示
+        if (data.error === "STORAGE_QUOTA_EXCEEDED") {
+          setError("服务器空间已满，请稍后再试或联系管理员");
+        } else {
+          setError(data.error || "上传失败");
+        }
+      }
     } catch (err) {
-      setError("NET_IO_ERROR");
+      setError("网络连接错误，请检查网络后重试");
     } finally {
       setLoading(false);
     }
@@ -532,106 +562,79 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
     return (
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        className="text-center space-y-4 sm:space-y-6 max-h-[70vh] overflow-y-auto px-2 py-4 scrollbar-hide"
+        className="space-y-4 max-h-[85vh] overflow-y-auto px-2 py-4 scrollbar-hide"
       >
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/30">
-            <CheckCircle2 className="text-green-500" size={24} />
+        {/* 并排展示的头部：成功信息与二维码 */}
+        <div className="flex items-center justify-between gap-4 bg-green-500/5 border border-green-500/20 p-4 sm:p-5 rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-bl-full -z-10 blur-2xl"></div>
+          
+          <div className="flex-1 text-left">
+            <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
+               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-green-500/20 flex flex-shrink-0 items-center justify-center text-green-600">
+                 <CheckCircle2 size={18} className="sm:w-5 sm:h-5" />
+               </div>
+               <h4 className="text-[12px] sm:text-[14px] font-black uppercase tracking-[0.1em] italic text-green-600 dark:text-green-500">
+                 {t.success}
+               </h4>
+            </div>
+            <div className="text-[9px] sm:text-[10px] text-[var(--text-secondary)] font-bold opacity-60 font-mono ml-[40px] sm:ml-[52px]">
+               EXP: {new Date(result.expiresAt).toLocaleString()}
+            </div>
           </div>
-          <h4 className="text-[12px] font-black uppercase tracking-[0.2em] italic">{t.success}</h4>
+          
+          {qrCodeUrl ? (
+            <div className="bg-white p-1.5 sm:p-2 rounded-xl shadow-sm shrink-0 border border-black/5 transform rotate-2 hover:rotate-0 hover:scale-105 transition-all cursor-pointer">
+              <img src={qrCodeUrl} alt="QR Code" className="w-16 h-16 sm:w-20 sm:h-20" />
+            </div>
+          ) : null}
         </div>
         
         {type === 'public' ? (
           <div className="space-y-4">
             {/* 公开链接展示 */}
-            <div className="card-minimal p-4 sm:p-5 border-green-500/20 bg-green-500/5">
-               <p className="text-[11px] font-bold mb-3 text-left text-[var(--text-secondary)] opacity-60 uppercase">{t.accessUrl}</p>
+            <div className="card-minimal p-4 border-[var(--border-color)] bg-[var(--bg-primary)]">
+               <p className="text-[11px] font-bold mb-2 text-left text-[var(--text-secondary)] opacity-60 uppercase">{t.accessUrl}</p>
                <div 
                  onClick={() => window.open(result.url, '_blank')}
-                 className="group flex items-center justify-between p-3 border border-[var(--border-color)] bg-[var(--bg-primary)] rounded-lg cursor-pointer hover:border-[var(--accent)] transition-all"
+                 className="group flex flex-col sm:flex-row items-center justify-between p-3 border border-[var(--border-color)] bg-[var(--bg-secondary)] rounded-lg cursor-pointer hover:border-[var(--accent)] transition-all gap-2"
                >
-                 <span className="text-[12px] font-medium truncate mr-4 text-[var(--accent)] underline">{window.location.origin}{result.url}</span>
-                 <ExternalLink size={14} className="opacity-40 group-hover:opacity-100 transition-opacity" />
+                 <span className="text-[12px] font-medium truncate w-full sm:w-auto text-[var(--accent)] underline">{window.location.origin}{result.url}</span>
+                 <ExternalLink size={14} className="opacity-40 group-hover:opacity-100 transition-opacity hidden sm:block text-[var(--accent)]" />
                </div>
-            </div>
-            
-            <div className="flex flex-col items-center gap-3">
-              <button 
-                type="button"
-                onClick={() => setShowQr(!showQr)}
-                className="flex items-center gap-2 text-[10px] font-black text-[var(--accent)] hover:opacity-100 opacity-60 transition-all uppercase tracking-[0.2em]"
-              >
-                <QrCode size={14} /> {t.qrCode}
-              </button>
-              <AnimatePresence>
-                {showQr && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                    className="bg-white p-2 rounded-xl overflow-hidden shadow-xl"
-                  >
-                    <img src={qrCodeUrl} alt="QR Code" className="w-40 h-40" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
             {/* 提取码展示 */}
-            <div className="card-minimal p-6 border-[var(--accent)]/30 bg-[var(--accent)]/5">
-               <p className="text-[11px] font-bold mb-3 text-[var(--text-secondary)] opacity-60 uppercase">{t.pickupCode}</p>
-               <div className="text-5xl font-mono tracking-wider font-extrabold text-[var(--accent)]">
+            <div className="card-minimal p-4 sm:p-5 border-[var(--accent)]/30 bg-[var(--accent)]/5">
+               <p className="text-[10px] sm:text-[11px] font-bold mb-3 text-center sm:text-left text-[var(--text-secondary)] opacity-60 uppercase">{t.pickupCode}</p>
+               <div className="text-4xl sm:text-5xl font-mono tracking-wider font-extrabold text-[var(--accent)] text-center my-2 sm:my-4">
                 {result.pickupCode}
                </div>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="flex gap-2">
+               
+               <div className="flex gap-2 text-[10px] mt-4">
                 <button 
                   onClick={() => handleCopy(result.pickupCode, 'code')}
-                  className="flex-1 py-4 border border-[var(--border-color)] rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-[var(--accent)] transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-2 sm:py-3 border border-[var(--border-color)] rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-[var(--accent)] transition-all flex items-center justify-center gap-2 bg-[var(--bg-primary)]"
                 >
                   {copyStatus === 'code' ? t.copied : <><Copy size={14} /> {t.copyCode}</>}
                 </button>
                 <button 
                   onClick={() => handleCopy(`${window.location.origin}/?pickup=${result.pickupCode}`, 'link')}
-                  className="flex-1 py-4 border border-[var(--border-color)] rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-[var(--accent)] transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-2 sm:py-3 border border-[var(--border-color)] rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-[var(--accent)] transition-all flex items-center justify-center gap-2 bg-[var(--bg-primary)]"
                 >
                   {copyStatus === 'link' ? t.copied : <><ExternalLink size={14} /> {t.copyLink}</>}
                 </button>
-              </div>
-              
-              <div className="flex flex-col items-center gap-3">
-                <button 
-                  type="button"
-                  onClick={() => setShowQr(!showQr)}
-                  className="flex items-center gap-3 text-[10px] font-black text-[var(--accent)] hover:opacity-100 opacity-60 transition-all uppercase tracking-[0.2em]"
-                >
-                  <QrCode size={14} /> {t.qrCode}
-                </button>
-                <AnimatePresence>
-                  {showQr && (
-                    <motion.div 
-                      initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                      className="bg-white p-2 rounded-xl overflow-hidden shadow-xl"
-                    >
-                      <img src={qrCodeUrl} alt="QR Code" className="w-40 h-40" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
             </div>
           </div>
         )}
 
-        <div className="text-[10px] text-[var(--text-secondary)] font-bold opacity-30 font-mono">
-          VALID_UNTIL: {new Date(result.expiresAt).toLocaleString()}
-        </div>
-
         <button 
           onClick={() => {setResult(null); setFiles([]); setContent(""); setTitle(""); setShowQr(false);}} 
-          className="w-full py-4 bg-[var(--bg-primary)] border border-[var(--border-color)] hover:border-[var(--accent)] hover:text-[var(--accent)] rounded-xl text-[13px] font-black transition-all mt-4 uppercase tracking-widest"
+          className="w-full py-3 sm:py-4 bg-[var(--bg-primary)] border border-[var(--border-color)] hover:border-[var(--accent)] hover:text-[var(--accent)] rounded-xl text-[12px] sm:text-[13px] font-black transition-all mt-4 uppercase tracking-widest flex items-center justify-center gap-2"
         >
+          <Upload size={16} className="opacity-50" />
           {t.newDeposit}
         </button>
       </motion.div>
@@ -776,13 +779,12 @@ function PickupForm({ t }: { t: any }) {
   const [searchParams] = useSearchParams();
   const autoPickupRun = useRef(false);
 
-  // 自动提取逻辑：如果是通过带参数的链接进入，自动触发一次提取尝试
+  // 自动填写逻辑：如果是通过带参数的链接进入，自动填充提取码但由用户手动触发提取
   useEffect(() => {
     const urlCode = searchParams.get('pickup');
     if (urlCode && urlCode.length === 6 && !autoPickupRun.current) {
       setCode(urlCode);
       autoPickupRun.current = true;
-      executeVerify(urlCode);
     }
   }, [searchParams]);
 

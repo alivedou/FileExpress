@@ -140,7 +140,23 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
 // 使用 Multer 处理文件上传，将其缓存在内存中以便直接加密
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: MAX_ZIP_PAYLOAD_SIZE_MB * 1024 * 1024 // 设置最大包体积
+    }
+});
+
+// Multer 错误处理中间件
+function handleMulterError(err: any, req: express.Request, res: express.Response, next: express.NextFunction) {
+    if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(413).json({ error: `文件体积超出服务器限制 (${MAX_ZIP_PAYLOAD_SIZE_MB}MB)` });
+        }
+        return res.status(400).json({ error: `上传错误: ${err.message}` });
+    }
+    next(err);
+}
 
 // --- API 路由 ---
 
@@ -214,7 +230,7 @@ app.get("/api/config", (req, res) => {
  * 公开模式上传接口
  * 仅允许 .txt 文件，直接存入 JSON 数据库，不进行加密（因为是公开分享）
  */
-app.post("/api/upload/public", rateLimiter, upload.single("file"), async (req, res) => {
+app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterError, async (req, res) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -250,15 +266,14 @@ app.post("/api/upload/public", rateLimiter, upload.single("file"), async (req, r
             return res.status(400).json({ error: "内容不能为空" });
         }
 
-        // 生成唯一的 ID：文件名+随机散列值，避免重名冲突
-        const shortHash = Math.random().toString(36).substring(2, 6);
-        const id = `pub_${fileName.toLowerCase().replace(/[^a-z0-9.]/gi, '_')}_${shortHash}`;
+        // 生成 ID：根据文件名生成固定 ID，以实现同名文件覆盖逻辑
+        const id = `pub_${fileName.toLowerCase().replace(/[^a-z0-9.]/gi, '_')}`;
         
         // 公开内容有效期固定为 3 天
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 3);
 
-        const fileRecord = {
+        const fileRecord: any = {
             id,
             type: "public",
             fileName,
@@ -270,6 +285,14 @@ app.post("/api/upload/public", rateLimiter, upload.single("file"), async (req, r
         };
 
         const local = loadLocalDb();
+        
+        // 保留原有的下载次数如果需要（这里可以根据需求决定是否保留，根据题意直接覆盖即可）
+        if (local.files[id]) {
+            fileRecord.downloadCount = local.files[id].downloadCount;
+            // 顺便可以在控制台打印一下覆盖事件
+            console.log(`[Public File Overwrite] ID: ${id}`);
+        }
+        
         local.files[id] = fileRecord;
         saveLocalDb(local);
         
@@ -288,7 +311,7 @@ app.post("/api/upload/public", rateLimiter, upload.single("file"), async (req, r
  * 私密柜上传接口
  * 支持多格式，强制进行 AES 加密，元数据存 JSON，二进制存硬盘
  */
-app.post("/api/upload/private", rateLimiter, upload.array("files"), async (req, res) => {
+app.post("/api/upload/private", rateLimiter, upload.array("files"), handleMulterError, async (req, res) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -430,32 +453,11 @@ app.post("/api/extract", async (req, res) => {
 
         if (!record) return res.status(404).json({ error: "提取码无效或文件已销毁" });
 
-        // 双重保险：再次检查销毁条件
-        if (new Date() > new Date(record.expiryDate) || record.downloadCount >= record.maxDownloads) {
-            const currentLocal = loadLocalDb();
-            if (record.isLocalBinary) deleteLocalFile(record.id);
-            delete currentLocal.files[record.id];
-            saveLocalDb(currentLocal);
-            return res.status(410).json({ error: "FILE_EXPIRED_OR_REMOVED" });
-        }
-
-        // 更新提取次数
-        const finalLocal = loadLocalDb();
-        finalLocal.files[record.id].downloadCount++;
-        saveLocalDb(finalLocal);
-
-        // 读取二进制并解密
-        const buffer = getLocalFile(record.id);
-        if (!buffer) return res.status(404).json({ error: "文件损坏或丢失" });
-        const decrypted = decrypt(buffer);
-        if (!decrypted) return res.status(500).json({ error: "数据解密失败（密钥可能已更改）" });
-        
         // 以字节流形式安全下发，提高移动端兼容性
         return res.json({ 
             success: true, 
             fileName: record.fileName, 
             isLocal: true,
-            // data: decrypted.toString("base64"), // 不再推荐 Base64 下载
             mimeType: record.mimeType,
             downloadUrl: `/api/download/${record.pickupCode}` // 提供直接下载路径
         });
@@ -490,6 +492,17 @@ app.get("/api/download/:code", async (req, res) => {
         res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(record.fileName)}"`);
         res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
         
+        // 增加下载次数并销毁
+        const finalLocal = loadLocalDb();
+        if (finalLocal.files[record.id]) {
+            finalLocal.files[record.id].downloadCount++;
+            if (finalLocal.files[record.id].downloadCount >= record.maxDownloads) {
+                if (record.isLocalBinary) deleteLocalFile(record.id);
+                delete finalLocal.files[record.id];
+            }
+            saveLocalDb(finalLocal);
+        }
+
         return res.send(decrypted);
     } catch (e) {
         res.status(500).send("下载失败");
@@ -530,13 +543,15 @@ app.post("/api/batch-upload", upload.single("file"), async (req, res) => {
     }
 
     try {
-        const title = req.file!.originalname.trim();
+        let title = req.file!.originalname.trim();
+        if (!title) title = "untitled.txt";
+        
         const id = `pub_${title.toLowerCase().replace(/[^a-z0-9.]/gi, '_')}`;
         
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 3);
 
-        const fileRecord = {
+        const fileRecord: any = {
             id,
             type: "public",
             fileName: title,
@@ -548,6 +563,9 @@ app.post("/api/batch-upload", upload.single("file"), async (req, res) => {
         };
 
         const local = loadLocalDb();
+        if (local.files[id]) {
+            fileRecord.downloadCount = local.files[id].downloadCount;
+        }
         local.files[id] = fileRecord;
         saveLocalDb(local);
 
@@ -595,8 +613,14 @@ async function startServer() {
         });
     }
 
-    app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, "0.0.0.0", async () => {
         console.log(`[File Express] 服务器运行于 http://0.0.0.0:${PORT}`);
+        // 启动时自动清理过期文件
+        try {
+            await checkStorageLimit();
+        } catch (e) {
+            console.error("Startup storage cleanup failed:", e);
+        }
     });
 }
 

@@ -162,6 +162,16 @@ run_app() {
     echo -e "----------------------------------------"
     echo -e "日志输出 (Ctrl+C 暂停运行并返回菜单):"
     
+    # 自动安装依赖和构建
+    if [ ! -d "node_modules" ]; then
+        echo -e "${YELLOW}正在安装依赖 (npm install)...${NC}"
+        npm install
+    fi
+    if [ ! -d "dist" ]; then
+        echo -e "${YELLOW}正在构建应用 (npm run build)...${NC}"
+        npm run build
+    fi
+    
     # 启动 Node 应用
     npm start
     
