@@ -459,7 +459,7 @@ function PublicSquare({ t, refreshKey }: { t: any, refreshKey: number }) {
 /**
  * 文件存放表单逻辑
  */
-function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType, setType: (v: StorageType) => void, onSuccess: () => void }) {
+function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: StorageType, setType: (v: StorageType) => void, onSuccess: () => void, config: any }) {
   const [files, setFiles] = useState<File[]>([]); // 物理文件数组
   const [title, setTitle] = useState(""); // 公开分享标题
   const [content, setContent] = useState(""); // 公开分享文本内容
@@ -470,6 +470,9 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>(""); // 生成的二维码图片数据
   const [showQr, setShowQr] = useState(false);
+
+  const maxSingle = config?.maxSingleFileMB || "5";
+  const maxZip = config?.maxZipPayloadMB || "50";
 
   // 成功后生成二维码：如果是公开内容生成链接码，私密内容生成包含提取参数的链接
   useEffect(() => {
