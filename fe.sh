@@ -64,7 +64,7 @@ project_config() {
         
         # 计算当前存储配额显示
         local current_quota_mb=${MAX_TOTAL_STORAGE_MB:-1024}
-        local current_quota_gb=$(echo "scale=1; $current_quota_mb / 1024" | bc)
+        local current_quota_gb=$(awk "BEGIN {printf \"%.1f\", $current_quota_mb / 1024}")
         echo -e "3. 总存储配额: ${GREEN}${current_quota_gb} GB${NC} (系统剩余: $(get_disk_free))"
         
         echo -e "4. 单文件上限: ${GREEN}${MAX_SINGLE_FILE_SIZE_MB:-10} MB${NC}"
