@@ -8,8 +8,6 @@ import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import AdmZip from "adm-zip";
 import cors from "cors";
-import admin from "firebase-admin";
-import { getFirestore } from "firebase-admin/firestore";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import crypto from "crypto";
@@ -46,15 +44,14 @@ function decrypt(buffer: Buffer): Buffer | null {
     }
 }
 
-// Load Firebase Config
-const firebaseConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
+// --- Storage Provider API (Template for future Cloudflare D1/R2) ---
+/**
+ * Note: Currently using local JSON + File System.
+ * To adapt for Cloudflare:
+ * 1. Replace loadLocalDb/saveLocalDb with D1 bindings.
+ * 2. Replace saveLocalFile/getLocalFile with KV or R2 bindings.
+ */
 
-// CRITICAL Force the project ID in the environment to ensure all Google Cloud SDKs use the correct project
-if (firebaseConfig.projectId) {
-    process.env.GOOGLE_CLOUD_PROJECT = firebaseConfig.projectId;
-}
-
-// --- Storage Fallback Logic ---
 const LOCAL_DB_PATH = path.join(process.cwd(), "local_db.json");
 const LOCAL_STORAGE_DIR = path.join(process.cwd(), "local_storage");
 
@@ -93,36 +90,6 @@ function deleteLocalFile(id: string) {
     }
 }
 
-let useFallback = false;
-
-// Initialize Firebase Admin
-let adminApp: admin.app.App;
-try {
-    if (admin.apps.length > 0) {
-        adminApp = admin.apps[0]!;
-    } else {
-        adminApp = admin.initializeApp({
-            credential: admin.credential.applicationDefault(),
-            projectId: firebaseConfig.projectId,
-            storageBucket: firebaseConfig.storageBucket
-        });
-    }
-} catch (e: any) {
-    console.warn("[Firebase] Init failed, using local fallback:", e.message);
-    useFallback = true;
-}
-
-let db: admin.firestore.Firestore;
-const dbId = firebaseConfig.firestoreDatabaseId;
-try {
-    db = (dbId && dbId !== "(default)") ? getFirestore(adminApp!, dbId) : getFirestore(adminApp!);
-} catch (e: any) {
-    console.warn("[Firestore] DB access failed, forcing local fallback.");
-    useFallback = true;
-}
-
-const storage = !useFallback ? admin.storage().bucket(firebaseConfig.storageBucket) : null;
-
 const app = express();
 const PORT = 3000;
 
@@ -132,36 +99,15 @@ app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// API routes go here FIRST
+// --- API Routes ---
+
 app.get("/api/health", (req, res) => {
     res.json({ 
         status: "ok", 
-        mode: useFallback ? "local" : "cloud",
+        mode: "local",
         timestamp: new Date().toISOString() 
     });
 });
-
-// --- Database Helper ---
-async function dbOperation<T>(operation: (currentDb: admin.firestore.Firestore) => Promise<T>, localOp: () => T): Promise<T> {
-    if (useFallback) return localOp();
-    try {
-        return await operation(db);
-    } catch (error: any) {
-        if (error.code === 7 || error.code === 5 || error.message?.includes("PERMISSION_DENIED") || error.message?.includes("NOT_FOUND")) {
-            console.error(`[Firebase] Service unavailable (Code ${error.code}). Using Local storage.`);
-            useFallback = true;
-            return localOp();
-        }
-        throw error;
-    }
-}
-
-// --- Storage Service Pattern ---
-interface StorageProvider {
-    saveFile(id: string, fileName: string, buffer: Buffer): Promise<string>;
-    deleteFile(path: string): Promise<void>;
-    getFile(path: string): Promise<Buffer>;
-}
 
 // Global Storage Usage Check (Circuit Breaker)
 async function checkStorageLimit(): Promise<boolean> {
@@ -262,16 +208,10 @@ app.post("/api/upload/public", upload.single("file"), async (req, res) => {
             downloadCount: 0
         };
 
-        await dbOperation<any>(
-            (currentDb) => currentDb.collection("files").doc(id).set(fileRecord),
-            () => {
-                const local = loadLocalDb();
-                local.files[id] = fileRecord;
-                saveLocalDb(local);
-                return true;
-            }
-        );
-
+        const local = loadLocalDb();
+        local.files[id] = fileRecord;
+        saveLocalDb(local);
+        
         res.json({
             success: true,
             id,
@@ -298,21 +238,11 @@ app.post("/api/upload/private", upload.array("files"), async (req, res) => {
         let pickupCode = "";
         let isUnique = false;
         let attempts = 0;
+        const local = loadLocalDb();
+        
         while (!isUnique && attempts < 10) {
             pickupCode = Math.floor(100000 + Math.random() * 900000).toString();
-            const existing = await dbOperation(
-                async (currentDb) => {
-                    const snap = await currentDb.collection("files")
-                        .where("type", "==", "private")
-                        .where("pickupCode", "==", pickupCode)
-                        .get();
-                    return snap.empty ? null : snap.docs[0].data();
-                },
-                () => {
-                    const local = loadLocalDb();
-                    return Object.values(local.files).find((f: any) => f.type === "private" && f.pickupCode === pickupCode);
-                }
-            );
+            const existing = Object.values(local.files).find((f: any) => f.type === "private" && f.pickupCode === pickupCode);
             if (!existing) isUnique = true;
             else attempts++;
         }
@@ -386,29 +316,12 @@ app.post("/api/upload/private", upload.array("files"), async (req, res) => {
             createdAt: new Date().toISOString()
         };
 
-        if (!useFallback && storage) {
-            const storagePath = `private/${id}_${finalFileName}`;
-            const fileUpload = storage.file(storagePath);
-            await fileUpload.save(encryptedBuffer, { 
-                contentType: "application/octet-stream", 
-                resumable: false 
-            });
-            fileRecord.storagePath = storagePath;
-        } else {
-            // Optimization: Store locally in file system instead of bloating JSON with base64
-            saveLocalFile(id, encryptedBuffer);
-            fileRecord.isLocalBinary = true;
-        }
+        // Optimization: Store locally in file system instead of bloating JSON with base64
+        saveLocalFile(id, encryptedBuffer);
+        fileRecord.isLocalBinary = true;
 
-        await dbOperation<any>(
-            (currentDb) => currentDb.collection("files").doc(id).set(fileRecord),
-            () => {
-                const local = loadLocalDb();
-                local.files[id] = fileRecord;
-                saveLocalDb(local);
-                return true;
-            }
-        );
+        local.files[id] = fileRecord;
+        saveLocalDb(local);
 
         res.json({
             success: true,
@@ -428,92 +341,50 @@ app.post("/api/extract", async (req, res) => {
         if (!code) return res.status(400).json({ error: "Code required" });
 
         const now = new Date();
-        const record: any = await dbOperation(
-            async (currentDb) => {
-                const snapshot = await currentDb.collection("files")
-                    .where("type", "==", "private")
-                    .where("pickupCode", "==", code)
-                    .orderBy("createdAt", "desc")
-                    .get();
-                if (snapshot.empty) return null;
-                // Find first non-expired
-                for (const doc of snapshot.docs) {
-                    const d = doc.data();
-                    if (new Date(d.expiryDate) > now && d.downloadCount < d.maxDownloads) {
-                        return { ...d, _ref: doc.ref };
-                    }
-                    // Clean up expired ones we found along the way
-                    await doc.ref.delete().catch(() => {});
-                }
-                return null;
-            },
-            () => {
-                const local = loadLocalDb();
-                const matches = Object.keys(local.files)
-                    .map(id => ({ ...local.files[id], id }))
-                    .filter(f => f.type === "private" && f.pickupCode === code)
-                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-                
-                for (const f of matches) {
-                    if (new Date(f.expiryDate) > now && f.downloadCount < f.maxDownloads) {
-                        return f;
-                    }
-                    delete local.files[f.id];
-                }
-                saveLocalDb(local);
-                return null;
+        const local = loadLocalDb();
+        const matches = Object.keys(local.files)
+            .map(id => ({ ...local.files[id], id }))
+            .filter(f => f.type === "private" && f.pickupCode === code)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        let record: any = null;
+        for (const f of matches) {
+            if (new Date(f.expiryDate) > now && f.downloadCount < f.maxDownloads) {
+                record = f;
+                break;
             }
-        );
+            if (f.isLocalBinary) deleteLocalFile(f.id);
+            delete local.files[f.id];
+        }
+        saveLocalDb(local);
 
         if (!record) return res.status(404).json({ error: "ENTRY_NOT_FOUND" });
 
-        const expiry = new Date(record.expiryDate);
-        if (new Date() > expiry || record.downloadCount >= record.maxDownloads) {
-            if (!useFallback && record._ref) {
-                await record._ref.delete();
-                if (record.storagePath && storage) await storage.file(record.storagePath).delete().catch(() => {});
-            } else {
-                const local = loadLocalDb();
-                if (record.isLocalBinary) deleteLocalFile(record.id);
-                delete local.files[record.id];
-                saveLocalDb(local);
-            }
+        if (new Date() > new Date(record.expiryDate) || record.downloadCount >= record.maxDownloads) {
+            const currentLocal = loadLocalDb();
+            if (record.isLocalBinary) deleteLocalFile(record.id);
+            delete currentLocal.files[record.id];
+            saveLocalDb(currentLocal);
             return res.status(410).json({ error: "FILE_EXPIRED_OR_REMOVED" });
         }
 
         // Increment count
-        if (!useFallback && record._ref) {
-            await record._ref.update({ downloadCount: admin.firestore.FieldValue.increment(1) });
-        } else {
-            const local = loadLocalDb();
-            local.files[record.id].downloadCount++;
-            saveLocalDb(local);
-        }
+        const finalLocal = loadLocalDb();
+        finalLocal.files[record.id].downloadCount++;
+        saveLocalDb(finalLocal);
 
-        if (!useFallback && record.storagePath && storage) {
-            const [buffer] = await storage.file(record.storagePath).download();
-            const decrypted = decrypt(buffer);
-            if (!decrypted) return res.status(500).json({ error: "DECRYPTION_FAILED" });
-            return res.json({ 
-                success: true, 
-                fileName: record.fileName, 
-                isLocal: true,
-                data: decrypted.toString("base64"),
-                mimeType: record.mimeType 
-            });
-        } else {
-            const buffer = getLocalFile(record.id);
-            if (!buffer) return res.status(404).json({ error: "FILE_NOT_FOUND_ON_DISK" });
-            const decrypted = decrypt(buffer);
-            if (!decrypted) return res.status(500).json({ error: "DECRYPTION_FAILED" });
-            return res.json({ 
-                success: true, 
-                fileName: record.fileName, 
-                isLocal: true,
-                data: decrypted.toString("base64"),
-                mimeType: record.mimeType 
-            });
-        }
+        const buffer = getLocalFile(record.id);
+        if (!buffer) return res.status(404).json({ error: "FILE_NOT_FOUND_ON_DISK" });
+        const decrypted = decrypt(buffer);
+        if (!decrypted) return res.status(500).json({ error: "DECRYPTION_FAILED" });
+        
+        return res.json({ 
+            success: true, 
+            fileName: record.fileName, 
+            isLocal: true,
+            data: decrypted.toString("base64"),
+            mimeType: record.mimeType 
+        });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
@@ -523,27 +394,16 @@ app.post("/api/extract", async (req, res) => {
 app.get("/api/view/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const data: any = await dbOperation(
-            async (currentDb) => {
-                const doc = await currentDb.collection("files").doc(id).get();
-                return doc.exists ? { ...doc.data(), _ref: doc.ref } : null;
-            },
-            () => {
-                const local = loadLocalDb();
-                return local.files[id] || null;
-            }
-        );
+        const local = loadLocalDb();
+        const data = local.files[id] || null;
 
         if (!data) return res.status(404).json({ error: "NOT_FOUND" });
 
         const expiry = new Date(data.expiryDate);
         if (new Date() > expiry) {
-            if (!useFallback && data._ref) await data._ref.delete();
-            else {
-                const local = loadLocalDb();
-                delete local.files[id];
-                saveLocalDb(local);
-            }
+            const updatedLocal = loadLocalDb();
+            delete updatedLocal.files[id];
+            saveLocalDb(updatedLocal);
             return res.status(410).json({ error: "EXPIRED" });
         }
 
@@ -577,15 +437,9 @@ app.post("/api/batch-upload", upload.single("file"), async (req, res) => {
             downloadCount: 0
         };
 
-        await dbOperation<any>(
-            (currentDb) => currentDb.collection("files").doc(id).set(fileRecord),
-            () => {
-                const local = loadLocalDb();
-                local.files[id] = fileRecord;
-                saveLocalDb(local);
-                return true;
-            }
-        );
+        const local = loadLocalDb();
+        local.files[id] = fileRecord;
+        saveLocalDb(local);
 
         res.send(`Successfully uploaded. Public access URL: ${process.env.APP_URL || "http://localhost:3000"}/view/${id}\n`);
     } catch (err: any) {
@@ -597,19 +451,8 @@ app.post("/api/batch-upload", upload.single("file"), async (req, res) => {
 app.get("/api/files/public", async (req, res) => {
     try {
         const now = new Date().toISOString();
-        const files: any[] = await dbOperation(
-            async (currentDb) => {
-                const snapshot = await currentDb.collection("files")
-                    .where("type", "==", "public")
-                    .limit(50)
-                    .get();
-                return snapshot.docs.map(doc => doc.data());
-            },
-            () => {
-                const local = loadLocalDb();
-                return Object.values(local.files).filter((f: any) => f.type === "public");
-            }
-        );
+        const local = loadLocalDb();
+        const files: any[] = Object.values(local.files).filter((f: any) => f.type === "public");
 
         const filtered = files
             .filter(f => f.expiryDate > now)
@@ -641,7 +484,6 @@ async function startServer() {
     // Start listening
     app.listen(PORT, "0.0.0.0", () => {
         console.log(`Server running at http://0.0.0.0:${PORT}`);
-        if (useFallback) console.warn("!!! RUNNING IN LOCAL STORAGE FALLBACK MODE !!!");
     });
 }
 
