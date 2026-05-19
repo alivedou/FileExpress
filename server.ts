@@ -204,7 +204,9 @@ async function checkStorageLimit(): Promise<boolean> {
 app.get("/api/config", (req, res) => {
     res.json({
         appName: APP_NAME,
-        appSubtitle: APP_SUBTITLE
+        appSubtitle: APP_SUBTITLE,
+        maxSingleFileMB: MAX_SINGLE_FILE_SIZE_MB,
+        maxZipPayloadMB: MAX_ZIP_PAYLOAD_SIZE_MB
     });
 });
 
@@ -448,16 +450,49 @@ app.post("/api/extract", async (req, res) => {
         const decrypted = decrypt(buffer);
         if (!decrypted) return res.status(500).json({ error: "数据解密失败（密钥可能已更改）" });
         
-        // 以 Base64 格式安全发送给前端进行下载
+        // 以字节流形式安全下发，提高移动端兼容性
         return res.json({ 
             success: true, 
             fileName: record.fileName, 
             isLocal: true,
-            data: decrypted.toString("base64"),
-            mimeType: record.mimeType 
+            // data: decrypted.toString("base64"), // 不再推荐 Base64 下载
+            mimeType: record.mimeType,
+            downloadUrl: `/api/download/${record.pickupCode}` // 提供直接下载路径
         });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * 直接下载接口 (GET)
+ * 解决移动端无法处理 Base64 下载的问题
+ */
+app.get("/api/download/:code", async (req, res) => {
+    try {
+        const { code } = req.params;
+        const now = new Date();
+        const local = loadLocalDb();
+        
+        const record = Object.values(local.files).find((f: any) => f.type === "private" && f.pickupCode === code) as any;
+        
+        if (!record || new Date(record.expiryDate) < now || record.downloadCount >= record.maxDownloads) {
+             return res.status(404).send("文件已过期或不存在");
+        }
+
+        const buffer = getLocalFile(record.id);
+        if (!buffer) return res.status(404).send("文件已丢失");
+        
+        const decrypted = decrypt(buffer);
+        if (!decrypted) return res.status(500).send("解密失败");
+
+        // 设置下载头，防止浏览器尝试预览（如图片或文本）
+        res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(record.fileName)}"`);
+        res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
+        
+        return res.send(decrypted);
+    } catch (e) {
+        res.status(500).send("下载失败");
     }
 });
 

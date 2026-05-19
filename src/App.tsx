@@ -312,7 +312,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
                     className="border-none !p-0"
                   />
                   
-                  <UploadForm t={t} type={storageType} setType={setStorageType} onSuccess={onUploadSuccess} />
+                  <UploadForm t={t} type={storageType} setType={setStorageType} onSuccess={onUploadSuccess} config={config} />
                 </motion.div>
               ) : (
                 <motion.div key="pickup-container" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -676,11 +676,21 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
          </div>
       ) : (
          <div className="space-y-4 sm:space-y-6">
-           {/* 文件拖拽组件，支持点击调起系统选择器 */}
-           <div 
-             className={`card-minimal border-dashed border-2 flex flex-col items-center py-4 sm:py-10 gap-1 sm:gap-3 cursor-pointer group transition-all ${files.length > 0 ? "border-[var(--accent)] bg-[var(--accent)]/5" : "hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"}`}
-             onClick={() => document.getElementById('priv-f')?.click()}
-           >
+            <div className="flex flex-col gap-1 items-center mb-4 px-2">
+              <div className="flex justify-between w-full text-[10px] uppercase font-bold tracking-tight opacity-50">
+                <span>{t.uploadLimit}</span>
+                <span className="text-[var(--accent)]">
+                  {maxSingle}MB (SINGLE) / {maxZip}MB (ZIP)
+                </span>
+              </div>
+              <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-[var(--border-color)] to-transparent" />
+            </div>
+
+            {/* 文件拖拽组件，支持点击调起系统选择器 */}
+            <div 
+              className={`card-minimal border-dashed border-2 flex flex-col items-center py-4 sm:py-10 gap-1 sm:gap-3 cursor-pointer group transition-all ${files.length > 0 ? "border-[var(--accent)] bg-[var(--accent)]/5" : "hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"}`}
+              onClick={() => document.getElementById('priv-f')?.click()}
+            >
               <FileUp className={`transition-all ${files.length > 0 ? "text-[var(--accent)] scale-110" : "opacity-20 group-hover:opacity-100 group-hover:text-[var(--accent)]"}`} size={24} />
               <div className="text-center px-4">
                 {files.length > 0 ? (
@@ -784,16 +794,17 @@ function PickupForm({ t }: { t: any }) {
       });
       const data = await res.json();
       if (data.success) {
-        // 解密流程说明：
-        // 后端将 AES 加密后的原始二进制数据以 Base64 编码发送。
-        // 前端通过 Data URI 方案将其还原并触发浏览器下载。
-        if (data.isLocal) {
+        // 优选方案：直接通过浏览器跳转到 GET 下载接口，移动端兼容性最佳
+        if (data.downloadUrl) {
+          window.location.href = data.downloadUrl;
+        } else if (data.data) {
+          // 备选方案（保留旧逻辑兼容性）
           const link = document.createElement('a');
           link.href = `data:${data.mimeType};base64,${data.data}`;
           link.download = data.fileName;
           link.click();
         } else {
-          window.open(data.downloadUrl, '_blank');
+          window.open(data.downloadUrl || `/view/${data.id}`, '_blank');
         }
       } else {
         if (data.error === "DECRYPTION_FAILED") {
