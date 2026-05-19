@@ -10,9 +10,9 @@ A minimalist, secure, and ephemeral file transfer hub.
 
 ## 🚀 Quick Deployment (Linux/VPS)
 
-1. **Install Node.js (18+)**
+1. **Install Node.js (20+ / LTS)**
    ```bash
-   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
    sudo apt-get install -y nodejs
    ```
 
@@ -31,7 +31,7 @@ A minimalist, secure, and ephemeral file transfer hub.
 
 ## 💻 Local Development (VSCode + nvm)
 ```bash
-nvm use 18
+nvm use 20
 npm install
 npm run dev    # Start dev server with HMR
 npm run build  # Build for production
