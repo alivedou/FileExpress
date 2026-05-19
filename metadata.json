@@ -1,0 +1,6 @@
+{
+  "name": "FileExpress - 文件快递柜",
+  "description": "极简响应式文件快递柜，支持公开广场文字分享与 6 位码私密文件存取，安全高效。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

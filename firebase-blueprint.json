@@ -1,0 +1,29 @@
+{
+  "entities": {
+    "FileRecord": {
+      "title": "File Record",
+      "description": "Metadata for an uploaded file or shared text content.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["public", "private"] },
+        "storagePath": { "type": "string" },
+        "fileName": { "type": "string" },
+        "mimeType": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "pickupCode": { "type": "string", "description": "6-digit code for private files" },
+        "expiryDate": { "type": "string", "format": "date-time" },
+        "maxDownloads": { "type": "number" },
+        "downloadCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "type", "fileName", "mimeType", "expiryDate", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/files/{fileId}": {
+      "schema": "FileRecord",
+      "description": "Stored file metadata"
+    }
+  }
+}

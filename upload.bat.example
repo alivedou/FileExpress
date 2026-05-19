@@ -1,0 +1,17 @@
+@echo off
+setlocal
+
+:: Set the API URL (Update this if your app is hosted elsewhere)
+set "APP_URL=https://ais-dev-zqd7llh43eszvdic6j3rqu-129735467021.asia-southeast1.run.app"
+
+if "%~1"=="" (
+    echo Usage: upload.bat [file_path.txt]
+    pause
+    exit /b
+)
+
+echo Uploading %~1 to FileExpress...
+
+curl -X POST -F "file=@%~1" "%APP_URL%/api/batch-upload"
+
+pause
