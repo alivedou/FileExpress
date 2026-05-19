@@ -1,119 +1,53 @@
-# FileExpress - 极简、全能文件快递柜 📦
-**作者: adou**
+# FileExpress 📦
+A minimalist, secure, and ephemeral file transfer hub.
 
-这是一个为个人和小型团队设计的临时文件传输工具。它既有极简的 Web 界面，也自带强大的服务器管理工具。
+## 🌟 Key Features
+- **Security**: Files are stored with **AES-256-GCM** encryption.
+- **Stability**: Built-in storage quota management and auto-cleanup for expired files.
+- **Anti-Abuse**: IP-based rate limiting to prevent automated script abuse.
+- **Management**: Includes a CLI tool (`fe.sh`) for server-side configuration.
+- **Responsive**: Mobile-first design with QR code support for easy pick-ups.
 
----
+## 🚀 Quick Deployment (Linux/VPS)
 
-## 🚀 傻瓜式部署教程 (VPS / Ubuntu / Debian)
-
-如果你有一台全新的服务器，只需遵循以下三个步骤：
-
-### 第一步：安装环境 (Node.js)
-```bash
-# 安装 Node.js 18+ (如果没装)
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-```
-
-### 第二步：下载与部署
-```bash
-# 下载本项目
-git clone <仓库地址>
-cd react-example
-
-# 安装依赖 & 构建前端
-npm install
-npm run build
-```
-
-### 第三步：使用 FE 工具一键管理 (推荐)
-输入以下两条命令，即可通过直观的中文菜单管理项目：
-```bash
-chmod +x fe.sh
-./fe.sh
-```
-> **提示**：建议设置快捷命令。输入 `./fe.sh` 选择“项目配置”后，可以自动计算合理的推荐容量配额。
-
----
-
-## 🛡️ 安全与稳定性 (面向技术爱好者)
-
-本系统不仅追求好用，更在底层设计上考虑了稳定性和安全性：
-
-1.  **物理加密 (AES-256-GCM)**：
-    私密文件并非直接存入硬盘，而是通过工业级加密算法加密后存储。即便黑客拿到了你的 `local_storage` 文件夹，没有密钥也无法还原任何文件。
-2.  **全自动限流 (Anti-Abuse)**：
-    为了防止被恶意脚本刷上传接口，系统内置了 **IP 频率限制**：单个 IP 每小时默认限制上传 20 次。
-3.  **动态熔断机制**：
-    实时监控服务器磁盘占用。一旦空间即将耗尽，系统会触发：
-    *   **自动清理**：优先删除所有已过期的非法文件。
-    *   **上传保护**：若清理后依然空间不足，将暂时禁止新上传，防止服务器宕机。
-4.  **FE CLI 管理**：
-    无需手动改 `.env`。输入 `./fe.sh` 即可查看当前配置、重置数据库、监控存储状态。
-
----
-
-## ☁️ 关于 Cloudflare 部署
-
-**本项目支持两种方式与 Cloudflare 协同工作：**
-
-### 1. 穿透代理 (最简单)
-如果你是在内网服务器（如家里或公司内网）运行 Node.js，使用 **Cloudflare Tunnel (cloudflared)** 是最佳选择。它可以直接将本地 3000 端口映射到全球域名，无需公网 IP 和复杂的防火墙配置。
-
-### 2. 深度迁移 (Workers / D1 / R2)
-如果你想把后端完全托管在 Cloudflare 边缘端：
-*   **当前代码**是基于 Node.js 标准版优化的，由于 Workers 没有本地文件系统，你需要将代码中 `getLocalFile` / `saveLocalFile` 逻辑修改为调用 **Cloudflare R2**（对象存储）。
-*   元数据管理可以轻松适配 **Cloudflare D1** (SQLite)。
-*   **本项目代码结构已按存储与逻辑分离编写，迁移成本极低。**
-
----
-
-## ⚙️ 环境变量速查
-
-| 变量名 | 默认值 | 说明 |
-| :--- | :--- | :--- |
-| `STORAGE_ENCRYPTION_KEY` | (自动生成) | **极其重要**：文件加密的钥匙。请妥善保存。 |
-| `MAX_TOTAL_STORAGE_MB` | 1024 (1GB) | 服务器总配额上限。可在 FE 菜单自动配置。 |
-| `MAX_SINGLE_FILE_SIZE_MB` | 10 | 允许上传的单个文件最大体积。 |
-
----
-
-## 📦 常见问题 (FAQ)
-
-*   **忘记了加密密钥怎么办？**
-    如果密钥丢失，之前存入的私密文件将永远无法解密。请务必在 `FE` 菜单中确认您的密钥已备份。
-*   **如何修改访问地址？**
-    如果您使用了 CDN 或反向代理，请修改 `.env` 中的 `APP_URL` 变量，这会影响取件码分享链接的生成。
-
----
-
-## 💻 本地开发 (VSCode + nvm)
-
-如果您想在自己的电脑上运行或调试：
-
-1. **准备环境**:
+1. **Install Node.js (18+)**
    ```bash
-   nvm install 18
-   nvm use 18
+   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+   sudo apt-get install -y nodejs
    ```
-2. **安装运行**:
-   - `npm install` (安装依赖)
-   - `npm run build` (构建)
-   - `npm start` (启动服务)
-3. **调试模式**: 运行 `npm run dev`，前端将支持 HMR 热更新。
+
+2. **Clone & Build**
+   ```bash
+   git clone https://github.com/alivedou/FileExpress
+   cd FileExpress
+   npm install && npm run build
+   ```
+
+3. **Configure & Start**
+   ```bash
+   chmod +x fe.sh
+   ./fe.sh  # Follow the menu to configure and start
+   ```
+
+## 💻 Local Development (VSCode + nvm)
+```bash
+nvm use 18
+npm install
+npm run dev    # Start dev server with HMR
+npm run build  # Build for production
+npm start      # Run production server
+```
+
+## ⚙️ Environment Variables
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `STORAGE_ENCRYPTION_KEY` | Auto-generated | AES encryption key for files. |
+| `MAX_TOTAL_STORAGE_MB` | 1024 | Total storage quota in MB. |
+| `MAX_SINGLE_FILE_SIZE_MB`| 10 | Max size for a single upload. |
+
+## 🗑️ Reset & Uninstallation
+- **To Reset Data**: Run `./fe.sh` and select **Option 2 (Full System Reset)**. This deletes all files, database records, and configuration.
+- **To Uninstall**: Simply delete the project folder (`rm -rf FileExpress`). The app is portable and leaves no system traces.
 
 ---
-
-## 🗑️ 安装、卸载与重置
-
-### 1. 如何安装
-请参考顶部的 [🚀 傻瓜式部署教程](#-傻瓜式部署教程-vps--ubuntu--debian)。核心在于 `npm run build` 生成构建产物，以及使用 `./fe.sh` 进行初始化配置。
-
-### 2. 如何重置或“软件卸载”
-如果你想清空所有文件记录并重新开始：
-- **方案 A (推荐)**: 运行 `./fe.sh` 并选择 **选项 2 (数据库与环境重置)**。这会安全地删除 `.env`(配置)、`local_db.json`(记录) 和 `local_storage`(物理文件)。
-- **方案 B (彻底删除)**: 直接在终端执行 `rm -rf <项目目录>` 即可。由于本项目是绿色免安装的（仅运行在 Node.js 环境中），删除目录即代表彻底卸载，不会在系统留下任何残留。
-
----
-**许可协议**：本项目仅供学习与个人使用。严禁用于存储任何非法合规内容。
+**License**: For educational and personal use only.
