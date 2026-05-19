@@ -1,6 +1,7 @@
 /**
- * File Express Frontend
- * Author: adou
+ * 文件快递柜 前端入口
+ * 作者: adou
+ * 技术栈：React 18 + Tailwind CSS + Framer Motion (动画) + Lucide React (图标)
  */
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { BrowserRouter, Routes, Route, useParams, useNavigate, useSearchParams } from "react-router-dom";
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 
-// --- i18n Data ---
+// --- 多语言翻译数据 ---
 const translations = {
   zh: {
     title: "文件快递柜",
@@ -61,6 +62,7 @@ const translations = {
     decryptionError: "数据解密失败，加密密钥不正确或已更改"
   },
   en: {
+    // ... 英文翻译保持不变 ...
     title: "File Express",
     subtitle: "Simple, Secure, Temporary File Storage",
     deposit: "Deposit",
@@ -112,11 +114,14 @@ type Language = "zh" | "en";
 type StorageType = "public" | "private";
 
 export default function App() {
+  // 全局语言状态
   const [lang, setLang] = useState<Language>("zh");
+  // 深色模式状态
   const [isDark, setIsDark] = useState(false);
+  // 从后端获取的应用标题等动态配置
   const [config, setConfig] = useState<any>(null);
 
-  // Sync theme
+  // 主题切换辅助逻辑
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
@@ -125,7 +130,7 @@ export default function App() {
     }
   }, [isDark]);
 
-  // Fetch server config
+  // 初始化获取应用名称和副标题
   useEffect(() => {
     fetch("/api/config")
       .then(res => res.json())
@@ -138,7 +143,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen transition-colors duration-500 overflow-x-hidden">
-        {/* Top Navbar */}
+        {/* 全局导航栏 */}
         <nav className="fixed top-0 w-full px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center z-50 bg-[var(--bg-primary)]/80 backdrop-blur-md border-b border-[var(--border-color)]">
           <div className="flex items-center gap-2 sm:gap-3 group cursor-default">
             <div className="relative w-2 h-2 sm:w-2.5 sm:h-2.5">
@@ -151,12 +156,14 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-3">
+            {/* 语言切换按钮 */}
             <button 
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}
               className="px-2 py-1 border border-[var(--border-color)] hover:border-[var(--accent)] hover:text-[var(--accent)] rounded transition-all text-[11px] font-bold"
             >
               {lang === 'zh' ? 'English' : '中文'}
             </button>
+            {/* 主题切换按钮 */}
             <button 
               onClick={() => setIsDark(!isDark)}
               className="p-2 border border-[var(--border-color)] hover:border-[var(--accent)] rounded transition-all"
@@ -174,7 +181,7 @@ export default function App() {
           </Routes>
         </div>
         
-        {/* Footer Info */}
+        {/* 装饰性页脚信心 */}
         <div className="fixed bottom-4 left-6 text-[10px] font-medium text-[var(--text-secondary)] opacity-40 pointer-events-none hidden md:block">
           STATUS: ONLINE // AUTHOR: adou
         </div>
@@ -186,8 +193,11 @@ export default function App() {
   );
 }
 
-// --- Components ---
+// --- 通用组件 ---
 
+/**
+ * 分段控件组件：用于 存放/提取、公开/私密 的模式切换
+ */
 function SegmentedControl<T extends string>({ 
   options, 
   value, 
@@ -223,6 +233,9 @@ function SegmentedControl<T extends string>({
   );
 }
 
+/**
+ * 首页主布局：包含控制台和公开广场
+ */
 function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }) {
   const [mode, setMode] = useState<"upload" | "pickup">("upload");
   const [storageType, setStorageType] = useState<StorageType>("public");
@@ -230,20 +243,21 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchParams] = useSearchParams();
 
-  // Watch for pickup URL parameter
+  // 监听 URL 参数。如果有 ?pickup=123456，自动进入提取模式
   useEffect(() => {
     if (searchParams.get('pickup')) {
       setMode('pickup');
     }
   }, [searchParams]);
 
+  // 上传成功后刷新公开广场
   const onUploadSuccess = () => {
     setRefreshKey(prev => prev + 1);
   };
 
   return (
     <main className="px-4 flex flex-col items-center max-w-4xl mx-auto w-full">
-      {/* Header Info */}
+      {/* 标题部分 */}
       <motion.div 
         initial={{ opacity: 0, y: 10 }} 
         animate={{ opacity: 1, y: 0 }}
@@ -262,7 +276,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
-        {/* Control Center */}
+        {/* 左侧：控制中心（存/取） */}
         <section className="space-y-4">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -309,6 +323,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
           </div>
         </section>
 
+        {/* 右侧：公开广场 */}
         <section className="space-y-4">
           <div className="flex items-center justify-between px-1">
              <div className="flex items-center gap-2">
@@ -328,6 +343,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
         </section>
       </div>
 
+      {/* 底部辅助连接 */}
       <div className="mt-8 sm:mt-12 flex items-center gap-4 sm:gap-6">
         <button 
           onClick={() => setShowNotice(true)}
@@ -340,7 +356,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
         <div className="text-[11px] text-[var(--text-secondary)] opacity-40 italic">{t.encryptedStatus}</div>
       </div>
 
-      {/* Notice Modal */}
+      {/* 使用说明弹窗 */}
       <AnimatePresence>
         {showNotice && (
           <motion.div 
@@ -371,6 +387,9 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
   );
 }
 
+/**
+ * 公开列表展示组件
+ */
 function PublicSquare({ t, refreshKey }: { t: any, refreshKey: number }) {
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -437,18 +456,22 @@ function PublicSquare({ t, refreshKey }: { t: any, refreshKey: number }) {
   );
 }
 
+/**
+ * 文件存放表单逻辑
+ */
 function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType, setType: (v: StorageType) => void, onSuccess: () => void }) {
-  const [files, setFiles] = useState<File[]>([]);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [duration, setDuration] = useState("24");
+  const [files, setFiles] = useState<File[]>([]); // 物理文件数组
+  const [title, setTitle] = useState(""); // 公开分享标题
+  const [content, setContent] = useState(""); // 公开分享文本内容
+  const [duration, setDuration] = useState("24"); // 保存时长
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<any>(null); // 上传成功结果存储（包含 ID 或 提取码）
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>(""); // 生成的二维码图片数据
   const [showQr, setShowQr] = useState(false);
 
+  // 成功后生成二维码：如果是公开内容生成链接码，私密内容生成包含提取参数的链接
   useEffect(() => {
     if (result) {
       const url = type === 'public' 
@@ -467,6 +490,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
     setTimeout(() => setCopyStatus(null), 2000);
   };
 
+  // 核心上传处理逻辑
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -474,6 +498,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
     try {
       const fd = new FormData();
       if (type === 'public') {
+        // 公开分享：支持文本粘贴或选择单个文本文件
         if (files.length > 0) {
           fd.append('file', files[0]);
         } else {
@@ -481,6 +506,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
           fd.append('content', content);
         }
       } else {
+        // 私密柜：支持多文件并行上传
         files.forEach(f => fd.append('files', f));
         fd.append('duration', duration);
       }
@@ -498,6 +524,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
     }
   };
 
+  // 成功后的信息展示页
   if (result) {
     return (
       <motion.div 
@@ -513,6 +540,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
         
         {type === 'public' ? (
           <div className="space-y-4">
+            {/* 公开链接展示 */}
             <div className="card-minimal p-4 sm:p-5 border-green-500/20 bg-green-500/5">
                <p className="text-[11px] font-bold mb-3 text-left text-[var(--text-secondary)] opacity-60 uppercase">{t.accessUrl}</p>
                <div 
@@ -546,6 +574,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
           </div>
         ) : (
           <div className="space-y-4">
+            {/* 提取码展示 */}
             <div className="card-minimal p-6 border-[var(--accent)]/30 bg-[var(--accent)]/5">
                <p className="text-[11px] font-bold mb-3 text-[var(--text-secondary)] opacity-60 uppercase">{t.pickupCode}</p>
                <div className="text-5xl font-mono tracking-wider font-extrabold text-[var(--accent)]">
@@ -606,6 +635,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
     );
   }
 
+  // 默认表单页
   return (
     <motion.form 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -646,11 +676,12 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
          </div>
       ) : (
          <div className="space-y-4 sm:space-y-6">
+           {/* 文件拖拽组件，支持点击调起系统选择器 */}
            <div 
              className={`card-minimal border-dashed border-2 flex flex-col items-center py-4 sm:py-10 gap-1 sm:gap-3 cursor-pointer group transition-all ${files.length > 0 ? "border-[var(--accent)] bg-[var(--accent)]/5" : "hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"}`}
              onClick={() => document.getElementById('priv-f')?.click()}
            >
-              <FileUp className={`transition-all ${files.length > 0 ? "text-[var(--accent)] scale-110" : "opacity-20 group-hover:opacity-100 group-hover:text-[var(--accent)]"}`} size={24} sm:size={32} />
+              <FileUp className={`transition-all ${files.length > 0 ? "text-[var(--accent)] scale-110" : "opacity-20 group-hover:opacity-100 group-hover:text-[var(--accent)]"}`} size={24} />
               <div className="text-center px-4">
                 {files.length > 0 ? (
                   <div className="space-y-1">
@@ -672,7 +703,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
                   if (e.target.files) {
                     const selected = Array.from(e.target.files);
                     if (selected.length > 10) {
-                      setError("MAX_10_FILES_ALLOWED");
+                      setError("最多允许 10 个文件");
                       setFiles(selected.slice(0, 10));
                     } else {
                       setFiles(selected);
@@ -682,6 +713,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
               />
            </div>
 
+           {/* 时间选择网格 */}
            <div className="space-y-3">
               <div className="flex justify-between items-center px-1">
                 <p className="text-[12px] font-bold text-[var(--text-secondary)]">{t.durationLabel}</p>
@@ -703,6 +735,7 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
         </div>
       )}
 
+      {/* 提交按钮：处理中会显示 Loading 动画 */}
       <button 
         disabled={loading || (type === 'public' ? (!content && !files.length) : !files.length)}
         className="w-full h-12 sm:h-14 bg-[var(--accent)] text-white shadow-md hover:shadow-lg rounded-lg text-[14px] font-bold disabled:opacity-50 transition-all flex items-center justify-center gap-2 active:scale-95"
@@ -720,6 +753,9 @@ function UploadForm({ t, type, setType, onSuccess }: { t: any, type: StorageType
   );
 }
 
+/**
+ * 提取表单组件：用于输入 6 位验证码
+ */
 function PickupForm({ t }: { t: any }) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -727,6 +763,7 @@ function PickupForm({ t }: { t: any }) {
   const [searchParams] = useSearchParams();
   const autoPickupRun = useRef(false);
 
+  // 自动提取逻辑：如果是通过带参数的链接进入，自动触发一次提取尝试
   useEffect(() => {
     const urlCode = searchParams.get('pickup');
     if (urlCode && urlCode.length === 6 && !autoPickupRun.current) {
@@ -747,6 +784,9 @@ function PickupForm({ t }: { t: any }) {
       });
       const data = await res.json();
       if (data.success) {
+        // 解密流程说明：
+        // 后端将 AES 加密后的原始二进制数据以 Base64 编码发送。
+        // 前端通过 Data URI 方案将其还原并触发浏览器下载。
         if (data.isLocal) {
           const link = document.createElement('a');
           link.href = `data:${data.mimeType};base64,${data.data}`;
@@ -763,7 +803,7 @@ function PickupForm({ t }: { t: any }) {
         }
       }
     } catch (err) {
-      setError("COMM_LINK_ERROR");
+      setError("网络连接中断");
     } finally {
       setLoading(false);
     }
@@ -787,6 +827,7 @@ function PickupForm({ t }: { t: any }) {
           <div className="h-[1px] w-8 bg-[var(--border-color)]" />
         </div>
       </div>
+      {/* 密码输入框：支持限制 6 位数字，并带有打字机样式的交互 */}
       <div className="relative group">
         <input 
           placeholder="000000"
@@ -817,6 +858,9 @@ function PickupForm({ t }: { t: any }) {
   );
 }
 
+/**
+ * 公开访问页：查看文字内容
+ */
 function ViewPage({ t }: { t: any }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -839,6 +883,7 @@ function ViewPage({ t }: { t: any }) {
           &lt; {t.return}
         </button>
 
+        {/* 骨架屏 / 加载动画 */}
         {loading ? (
           <div className="py-20 text-center">
             <div className="w-12 h-1 bg-[var(--border-color)] mx-auto relative overflow-hidden mb-6 rounded-full">
@@ -862,6 +907,7 @@ function ViewPage({ t }: { t: any }) {
           </div>
         ) : (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card-minimal border-t-4 border-t-[var(--accent)]">
+            {/* 内容预览头部 */}
             <div className="p-8 border-b border-[var(--border-color)] flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-[var(--accent)]/5">
               <div className="space-y-4">
                 <div className="inline-block px-3 py-1 bg-[var(--accent)] text-white font-black text-[9px] uppercase tracking-widest italic rounded">
@@ -877,6 +923,7 @@ function ViewPage({ t }: { t: any }) {
               </div>
               <Shield className="text-[var(--accent)]/40 hidden md:block" size={48} />
             </div>
+            {/* 文字分享的核心展示区域 */}
             <div className="p-8 bg-black/5 dark:bg-white/5 rounded-b-xl font-mono text-sm leading-relaxed whitespace-pre-wrap selection:bg-[var(--accent)] selection:text-white border-t border-[var(--border-color)] min-h-[300px]">
               {data.content}
             </div>

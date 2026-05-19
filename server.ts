@@ -1,6 +1,7 @@
 /**
- * File Express Backend
- * Author: adou
+ * 文件快递柜 后端服务
+ * 作者: adou
+ * 功能：提供文件加密存储、提取、公开分享及存储容量熔断机制
  */
 import express from "express";
 import path from "path";
@@ -12,24 +13,35 @@ import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import crypto from "crypto";
 
-// --- ENV Configuration ---
+// --- 环境变量配置 ---
 const APP_NAME = process.env.APP_NAME || "File Express";
 const APP_SUBTITLE = process.env.APP_SUBTITLE || "极简、安全、临时的文件传输中心";
+// 单个文件最大限制 (MB)
 const MAX_SINGLE_FILE_SIZE_MB = parseInt(process.env.MAX_SINGLE_FILE_SIZE_MB || "10");
+// ZIP 压缩包最大限制 (MB)
 const MAX_ZIP_PAYLOAD_SIZE_MB = parseInt(process.env.MAX_ZIP_PAYLOAD_SIZE_MB || "50");
-const MAX_TOTAL_STORAGE_MB = parseInt(process.env.MAX_TOTAL_STORAGE_MB || "1024"); // 1GB default limit
+// 全局存储配额限制 (MB) - 当总占用达到此值时将触发自动清理或停止上传
+const MAX_TOTAL_STORAGE_MB = parseInt(process.env.MAX_TOTAL_STORAGE_MB || "1024"); 
+// 加密密钥：建议在生产环境中通过环境变量设置 32 位随机字符串
 const ENCRYPTION_KEY = process.env.STORAGE_ENCRYPTION_KEY || "8664183d-3b8f-431f-9988-6622b72f104d"; 
 
-// --- Encryption Helpers ---
+// --- 加密助手函数 ---
+/**
+ * 使用 AES-256-GCM 对 Buffer 进行加密
+ * GCM 模式提供认证加密，确保数据未被篡改
+ */
 function encrypt(buffer: Buffer): Buffer {
-    const iv = crypto.randomBytes(12);
+    const iv = crypto.randomBytes(12); // 初始化向量 (12字节是 GCM 推荐长度)
     const cipher = crypto.createCipheriv("aes-256-gcm", Buffer.from(ENCRYPTION_KEY.padEnd(32).slice(0, 32)), iv);
     const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-    // Format: [iv (12)] [authTag (16)] [encryptedPayload]
+    const authTag = cipher.getAuthTag(); // 获取身份验证标签
+    // 返回格式: [IV (12字节)] [AuthTag (16字节)] [加密后的数据]
     return Buffer.concat([iv, authTag, encrypted]);
 }
 
+/**
+ * 解密经 AES-256-GCM 加密的数据
+ */
 function decrypt(buffer: Buffer): Buffer | null {
     try {
         const iv = buffer.slice(0, 12);
@@ -39,26 +51,52 @@ function decrypt(buffer: Buffer): Buffer | null {
         decipher.setAuthTag(authTag);
         return Buffer.concat([decipher.update(encrypted), decipher.final()]);
     } catch (e) {
-        console.error("Decryption failed:", e);
+        console.error("解密失败（可能是密钥不匹配或数据损坏）:", e);
         return null;
     }
 }
 
-// --- Storage Provider API (Template for future Cloudflare D1/R2) ---
+// --- 防滥用频率限制 (Anti-Abuse) ---
+const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 小时窗口
+const MAX_UPLOADS_PER_WINDOW = 20; // 每个 IP 每推 20 次
+
 /**
- * Note: Currently using local JSON + File System.
- * To adapt for Cloudflare:
- * 1. Replace loadLocalDb/saveLocalDb with D1 bindings.
- * 2. Replace saveLocalFile/getLocalFile with KV or R2 bindings.
+ * 核心限流中间件
  */
+function rateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) {
+    const ip = req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
+    const now = Date.now();
+    const userLimit = rateLimitMap.get(ip);
+
+    if (!userLimit || (now - userLimit.lastReset) > RATE_LIMIT_WINDOW_MS) {
+        rateLimitMap.set(ip, { count: 1, lastReset: now });
+        return next();
+    }
+
+    if (userLimit.count >= MAX_UPLOADS_PER_WINDOW) {
+        console.warn(`[限流触发] IP: ${ip} 尝试频率过高`);
+        return res.status(429).json({ error: "操作过于频繁，请 1 小时后再试" });
+    }
+
+    userLimit.count++;
+    next();
+}
+
+// 每 24 小时自动清空一次限流缓存，防止长时间运行导致内存溢出
+setInterval(() => {
+    rateLimitMap.clear();
+}, 24 * 60 * 60 * 1000);
 
 const LOCAL_DB_PATH = path.join(process.cwd(), "local_db.json");
 const LOCAL_STORAGE_DIR = path.join(process.cwd(), "local_storage");
 
+// 确保本地存储目录存在
 if (!fs.existsSync(LOCAL_STORAGE_DIR)) {
     fs.mkdirSync(LOCAL_STORAGE_DIR, { recursive: true });
 }
 
+// 加载元数据数据库
 function loadLocalDb() {
     if (fs.existsSync(LOCAL_DB_PATH)) {
         try {
@@ -67,14 +105,17 @@ function loadLocalDb() {
     }
     return { files: {} };
 }
+// 写入元数据数据库
 function saveLocalDb(data: any) { fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2)); }
 
+// 存储二进制文件到物理目录
 function saveLocalFile(id: string, buffer: Buffer): string {
     const filePath = path.join(LOCAL_STORAGE_DIR, id);
     fs.writeFileSync(filePath, buffer);
     return filePath;
 }
 
+// 从物理目录提取二进制文件
 function getLocalFile(id: string): Buffer | null {
     const filePath = path.join(LOCAL_STORAGE_DIR, id);
     if (fs.existsSync(filePath)) {
@@ -83,6 +124,7 @@ function getLocalFile(id: string): Buffer | null {
     return null;
 }
 
+// 删除物理文件
 function deleteLocalFile(id: string) {
     const filePath = path.join(LOCAL_STORAGE_DIR, id);
     if (fs.existsSync(filePath)) {
@@ -97,10 +139,12 @@ app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
+// 使用 Multer 处理文件上传，将其缓存在内存中以便直接加密
 const upload = multer({ storage: multer.memoryStorage() });
 
-// --- API Routes ---
+// --- API 路由 ---
 
+// 健康检查接口
 app.get("/api/health", (req, res) => {
     res.json({ 
         status: "ok", 
@@ -109,30 +153,40 @@ app.get("/api/health", (req, res) => {
     });
 });
 
-// Global Storage Usage Check (Circuit Breaker)
+/**
+ * 存储容量检查：熔断机制逻辑
+ * 检查当前服务器占用总容量，如果接近阈值则触发过期文件清理
+ */
 async function checkStorageLimit(): Promise<boolean> {
     const local = loadLocalDb();
     let totalSize = 0;
+    // 1. 计算内存中元数据的占用 (主要是文本内容)
     Object.values(local.files).forEach((f: any) => {
-        if (f.fileSize) totalSize += f.fileSize;
-        else if (f.content) totalSize += Buffer.from(f.content).length;
+        if (f.type === "public" && f.content) {
+            totalSize += Buffer.from(f.content).length;
+        }
     });
 
-    // Add physical storage folder check if local mode
+    // 2. 计算物理二进制文件的实际硬盘占用
     if (fs.existsSync(LOCAL_STORAGE_DIR)) {
         const files = fs.readdirSync(LOCAL_STORAGE_DIR);
         files.forEach(file => {
-            totalSize += fs.statSync(path.join(LOCAL_STORAGE_DIR, file)).size;
+            const stats = fs.statSync(path.join(LOCAL_STORAGE_DIR, file));
+            if (stats.isFile()) {
+                totalSize += stats.size;
+            }
         });
     }
 
     const usageMb = totalSize / (1024 * 1024);
     
+    // 如果占用超过总限额的 90%，触发积极清理
     if (usageMb > MAX_TOTAL_STORAGE_MB * 0.9) {
-        console.warn(`[Storage] Usage ${usageMb.toFixed(2)}MB approaching limit ${MAX_TOTAL_STORAGE_MB}MB. Triggering cleanup.`);
+        console.warn(`[存储预警] 当前占用 ${usageMb.toFixed(2)}MB，接近上限 ${MAX_TOTAL_STORAGE_MB}MB。触发强制清理。`);
         const now = new Date();
         let cleaned = 0;
         Object.keys(local.files).forEach(id => {
+            // 删除所有已过期的文件
             if (new Date(local.files[id].expiryDate) < now) {
                 if (local.files[id].isLocalBinary) deleteLocalFile(id);
                 delete local.files[id];
@@ -142,11 +196,11 @@ async function checkStorageLimit(): Promise<boolean> {
         if (cleaned > 0) saveLocalDb(local);
     }
 
+    // 如果清理后依然超限，返回 false (阻断上传)
     return usageMb < MAX_TOTAL_STORAGE_MB;
 }
 
-// --- API Routes ---
-
+// 获取前端基本配置
 app.get("/api/config", (req, res) => {
     res.json({
         appName: APP_NAME,
@@ -154,8 +208,11 @@ app.get("/api/config", (req, res) => {
     });
 });
 
-// Public Upload (Only .txt)
-app.post("/api/upload/public", upload.single("file"), async (req, res) => {
+/**
+ * 公开模式上传接口
+ * 仅允许 .txt 文件，直接存入 JSON 数据库，不进行加密（因为是公开分享）
+ */
+app.post("/api/upload/public", rateLimiter, upload.single("file"), async (req, res) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -173,7 +230,7 @@ app.post("/api/upload/public", upload.single("file"), async (req, res) => {
 
         if (file) {
             if (!file.originalname.endsWith(".txt")) {
-                return res.status(400).json({ error: "Only .txt files are allowed in public mode" });
+                return res.status(400).json({ error: "公开模式仅支持 .txt 文件" });
             }
             fileName = file.originalname.trim() || "untitled.txt";
             content = file.buffer.toString("utf-8");
@@ -188,12 +245,14 @@ app.post("/api/upload/public", upload.single("file"), async (req, res) => {
         }
 
         if (!content && !file) {
-            return res.status(400).json({ error: "Content cannot be empty" });
+            return res.status(400).json({ error: "内容不能为空" });
         }
 
-        // Use filename (lowercase sanitized) + tiny hash to avoid massive collisions while keeping it readable
+        // 生成唯一的 ID：文件名+随机散列值，避免重名冲突
         const shortHash = Math.random().toString(36).substring(2, 6);
         const id = `pub_${fileName.toLowerCase().replace(/[^a-z0-9.]/gi, '_')}_${shortHash}`;
+        
+        // 公开内容有效期固定为 3 天
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 3);
 
@@ -223,23 +282,27 @@ app.post("/api/upload/public", upload.single("file"), async (req, res) => {
     }
 });
 
-// Private Upload
-app.post("/api/upload/private", upload.array("files"), async (req, res) => {
+/**
+ * 私密柜上传接口
+ * 支持多格式，强制进行 AES 加密，元数据存 JSON，二进制存硬盘
+ */
+app.post("/api/upload/private", rateLimiter, upload.array("files"), async (req, res) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
         }
         const files = req.files as Express.Multer.File[];
         if (!files || files.length === 0) {
-            return res.status(400).json({ error: "No files uploaded" });
+            return res.status(400).json({ error: "未选择上传文件" });
         }
 
-        // Generate unique 6-digit pickup code
+        // 生成唯一的 6 位提取码
         let pickupCode = "";
         let isUnique = false;
         let attempts = 0;
         const local = loadLocalDb();
         
+        // 尝试生成不重复的验证码
         while (!isUnique && attempts < 10) {
             pickupCode = Math.floor(100000 + Math.random() * 900000).toString();
             const existing = Object.values(local.files).find((f: any) => f.type === "private" && f.pickupCode === pickupCode);
@@ -248,14 +311,14 @@ app.post("/api/upload/private", upload.array("files"), async (req, res) => {
         }
 
         const durationHours = parseInt(req.body.duration) || 24;
-        const maxDownloads = 5;
+        const maxDownloads = 5; // 私密柜默认最多提取 5 次，之后即刻销毁
 
-        // Check file types
+        // 文件格式审查
         const allowedExtensions = [".jpg", ".jpeg", ".png", ".txt", ".md", ".zip"];
         for (const file of files) {
             const ext = path.extname(file.originalname).toLowerCase();
             if (!allowedExtensions.includes(ext)) {
-                return res.status(400).json({ error: `File type not allowed: ${ext}. Allowed: .jpg, .png, .txt, .md, .zip` });
+                return res.status(400).json({ error: `格式不支持: ${ext}。 仅支持: .jpg, .png, .txt, .md, .zip` });
             }
         }
 
@@ -263,13 +326,12 @@ app.post("/api/upload/private", upload.array("files"), async (req, res) => {
         let finalFileName: string;
         let finalMimeType: string;
 
-        // Determine if we need to zip
-        // Logic: if multiple files, or if single file > 5MB and not zip
+        // 打包逻辑：如果上传了多个文件，或者单个文件较大，则自动封装为 ZIP
         const isSingleZip = files.length === 1 && (files[0].mimetype === "application/zip" || files[0].originalname.endsWith(".zip"));
 
         if (isSingleZip) {
             if (files[0].size > MAX_ZIP_PAYLOAD_SIZE_MB * 1024 * 1024) {
-                return res.status(400).json({ error: `Zip file exceeds ${MAX_ZIP_PAYLOAD_SIZE_MB}MB limit` });
+                return res.status(400).json({ error: `ZIP 超出上限 ${MAX_ZIP_PAYLOAD_SIZE_MB}MB` });
             }
             finalBuffer = files[0].buffer;
             finalFileName = files[0].originalname;
@@ -280,7 +342,7 @@ app.post("/api/upload/private", upload.array("files"), async (req, res) => {
                 finalFileName = files[0].originalname;
                 finalMimeType = files[0].mimetype;
             } else {
-                // Zip multiple files or large single file
+                // 多文件自动压缩
                 const zip = new AdmZip();
                 files.forEach(file => {
                     zip.addFile(file.originalname, file.buffer);
@@ -288,15 +350,15 @@ app.post("/api/upload/private", upload.array("files"), async (req, res) => {
                 const zipBuffer = zip.toBuffer();
 
                 if (zipBuffer.length > MAX_ZIP_PAYLOAD_SIZE_MB * 1024 * 1024) {
-                    return res.status(400).json({ error: `Compressed payload exceeds ${MAX_ZIP_PAYLOAD_SIZE_MB}MB limit` });
+                    return res.status(400).json({ error: `自动压缩包超出上限 ${MAX_ZIP_PAYLOAD_SIZE_MB}MB` });
                 }
                 finalBuffer = zipBuffer;
-                finalFileName = files.length === 1 ? `${files[0].originalname}.zip` : "package.zip";
+                finalFileName = files.length === 1 ? `${files[0].originalname}.zip` : "文件包.zip";
                 finalMimeType = "application/zip";
             }
         }
 
-        // --- ENCRYPT DATA BEFORE STORAGE ---
+        // --- 在入库前进行物理加密 ---
         const encryptedBuffer = encrypt(finalBuffer);
 
         const id = uuidv4();
@@ -313,12 +375,12 @@ app.post("/api/upload/private", upload.array("files"), async (req, res) => {
             expiryDate: expiryDate.toISOString(),
             maxDownloads,
             downloadCount: 0,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            isLocalBinary: true // 标记这是一个物理文件
         };
 
-        // Optimization: Store locally in file system instead of bloating JSON with base64
+        // 存储二进制文件到物理磁盘
         saveLocalFile(id, encryptedBuffer);
-        fileRecord.isLocalBinary = true;
 
         local.files[id] = fileRecord;
         saveLocalDb(local);
@@ -329,19 +391,23 @@ app.post("/api/upload/private", upload.array("files"), async (req, res) => {
             expiresAt: fileRecord.expiryDate
         });
     } catch (error: any) {
-        console.error("[Upload] Private failed:", error);
+        console.error("[私密上传] 错误:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Extract File
+/**
+ * 提取文件路由
+ * 通过 6 位码调取私密柜文件，解密后下发
+ */
 app.post("/api/extract", async (req, res) => {
     try {
         const { code } = req.body;
-        if (!code) return res.status(400).json({ error: "Code required" });
+        if (!code) return res.status(400).json({ error: "请输入提取码" });
 
         const now = new Date();
         const local = loadLocalDb();
+        // 查找匹配且有效的记录
         const matches = Object.keys(local.files)
             .map(id => ({ ...local.files[id], id }))
             .filter(f => f.type === "private" && f.pickupCode === code)
@@ -349,17 +415,20 @@ app.post("/api/extract", async (req, res) => {
         
         let record: any = null;
         for (const f of matches) {
+            // 检查有效期和剩余次数
             if (new Date(f.expiryDate) > now && f.downloadCount < f.maxDownloads) {
                 record = f;
                 break;
             }
+            // 如果不符合条件，顺手清理过期的资源以节省空间
             if (f.isLocalBinary) deleteLocalFile(f.id);
             delete local.files[f.id];
         }
         saveLocalDb(local);
 
-        if (!record) return res.status(404).json({ error: "ENTRY_NOT_FOUND" });
+        if (!record) return res.status(404).json({ error: "提取码无效或文件已销毁" });
 
+        // 双重保险：再次检查销毁条件
         if (new Date() > new Date(record.expiryDate) || record.downloadCount >= record.maxDownloads) {
             const currentLocal = loadLocalDb();
             if (record.isLocalBinary) deleteLocalFile(record.id);
@@ -368,16 +437,18 @@ app.post("/api/extract", async (req, res) => {
             return res.status(410).json({ error: "FILE_EXPIRED_OR_REMOVED" });
         }
 
-        // Increment count
+        // 更新提取次数
         const finalLocal = loadLocalDb();
         finalLocal.files[record.id].downloadCount++;
         saveLocalDb(finalLocal);
 
+        // 读取二进制并解密
         const buffer = getLocalFile(record.id);
-        if (!buffer) return res.status(404).json({ error: "FILE_NOT_FOUND_ON_DISK" });
+        if (!buffer) return res.status(404).json({ error: "文件损坏或丢失" });
         const decrypted = decrypt(buffer);
-        if (!decrypted) return res.status(500).json({ error: "DECRYPTION_FAILED" });
+        if (!decrypted) return res.status(500).json({ error: "数据解密失败（密钥可能已更改）" });
         
+        // 以 Base64 格式安全发送给前端进行下载
         return res.json({ 
             success: true, 
             fileName: record.fileName, 
@@ -390,21 +461,23 @@ app.post("/api/extract", async (req, res) => {
     }
 });
 
-// View Public Content
+/**
+ * 访问公开内容接口
+ */
 app.get("/api/view/:id", async (req, res) => {
     try {
         const { id } = req.params;
         const local = loadLocalDb();
         const data = local.files[id] || null;
 
-        if (!data) return res.status(404).json({ error: "NOT_FOUND" });
+        if (!data) return res.status(404).json({ error: "内容不存在" });
 
         const expiry = new Date(data.expiryDate);
         if (new Date() > expiry) {
             const updatedLocal = loadLocalDb();
             delete updatedLocal.files[id];
             saveLocalDb(updatedLocal);
-            return res.status(410).json({ error: "EXPIRED" });
+            return res.status(410).json({ error: "内容已过期" });
         }
 
         res.json({ content: data.content, fileName: data.fileName, createdAt: data.createdAt });
@@ -413,10 +486,12 @@ app.get("/api/view/:id", async (req, res) => {
     }
 });
 
-// Batch Upload
+/**
+ * 批量上传辅助接口：用于演示或其他便捷脚本调用
+ */
 app.post("/api/batch-upload", upload.single("file"), async (req, res) => {
     if (!req.file || !req.file.originalname.endsWith(".txt")) {
-        return res.status(400).send("Error: Only .txt files allowed.\n");
+        return res.status(400).send("Error: 仅允许 .txt 文件。\n");
     }
 
     try {
@@ -441,13 +516,15 @@ app.post("/api/batch-upload", upload.single("file"), async (req, res) => {
         local.files[id] = fileRecord;
         saveLocalDb(local);
 
-        res.send(`Successfully uploaded. Public access URL: ${process.env.APP_URL || "http://localhost:3000"}/view/${id}\n`);
+        res.send(`上传成功。 访问链接: ${process.env.APP_URL || "http://localhost:3000"}/view/${id}\n`);
     } catch (err: any) {
         res.status(500).send(`Error: ${err.message}\n`);
     }
 });
 
-// GET Public Files List
+/**
+ * 获取公开广场列表接口（最近 50 条）
+ */
 app.get("/api/files/public", async (req, res) => {
     try {
         const now = new Date().toISOString();
@@ -465,15 +542,17 @@ app.get("/api/files/public", async (req, res) => {
     }
 });
 
-// --- Vite Middleware ---
+// --- Vite 中间件（集成开发与生产环境）---
 async function startServer() {
     if (process.env.NODE_ENV !== "production") {
+        // 开发环境下挂载 Vite
         const vite = await createViteServer({
             server: { middlewareMode: true },
             appType: "spa",
         });
         app.use(vite.middlewares);
     } else {
+        // 生产环境下直接托管静态资源
         const distPath = path.join(process.cwd(), "dist");
         app.use(express.static(distPath));
         app.get("*", (req, res) => {
@@ -481,9 +560,8 @@ async function startServer() {
         });
     }
 
-    // Start listening
     app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Server running at http://0.0.0.0:${PORT}`);
+        console.log(`[File Express] 服务器运行于 http://0.0.0.0:${PORT}`);
     });
 }
 

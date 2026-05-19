@@ -1,97 +1,119 @@
-# FileExpress - 极简文件快递柜
-**Author: adou**
+# FileExpress - 极简、全能文件快递柜 📦
+**作者: adou**
 
-一个极简、安全、临时的文件传送枢纽。支持公开文本广场分享与基于 6 位验证码的私密文件柜。
+这是一个为个人和小型团队设计的临时文件传输工具。它既有极简的 Web 界面，也自带强大的服务器管理工具。
 
-## 🌟 核心特色
-- 🔒 **全流程加密**：所有私密文件在后端均经过 **AES-256-GCM** 工业级加密存储。即便数据库文件泄露，无密钥也无法读取内容。
-- ⚙️ **高度可定制**：支持通过环境变量自定义项目名称、副标题、以及文件上传体积限制。
-- 🛡️ **智能熔断机制**：内置存储限额检查（默认为 1GB）。当容量接近上限时，系统会自动清理过期文件；若清理后仍超限，将暂时阻断新上传以保护服务器稳定。
-- 📱 **响应式设计**：针对手机端进行了深度优化，新增 **二维码 (QR Code)** 扫码取件功能，并针对小屏布局进行了滚动区域优化，确保操作顺滑。
-- 🛡️ **高性能本地存储**：在本地模式下采用分离式存储（Metadata 存 JSON，加密文件存二进制目录），极大提升了移动端上传大图片或文件的稳定性。
-- 🛡️ **灵活的存储适配**：默认采用高性能本地存储（Metadata 存 JSON，加密文件存二进制目录），并具备适配 Cloudflare D1/KV/R2 云原生存储的架构潜力。
-- 🛡️ **安全销毁机制**：
-  - **私密柜**：支持 JPG, PNG, TXT, MD, ZIP 格式。提取 5 次或超过预设时长立即永久销毁。
-  - **公开模式**：极简文本分享，有效期固定为 3 天。
-- 🌓 **自适应主题**：支持中英文切换，适配深色/浅色模式，采用 Inter 与 JetBrains Mono 字体，观感自然。
+---
 
-## 🛠️ 技术栈
-- **前端 (Frontend)**: React 18, Vite, Tailwind CSS, Framer Motion, Lucide React
-- **后端 (Backend)**: Node.js (Express), Multer, Crypto (AES-256-GCM)
-- **存储 (Storage)**: 本地存储 (Metadata: JSON / Binary: Filesystem) / 预留 Cloudflare D1/KV 接口
+## 🚀 傻瓜式部署教程 (VPS / Ubuntu / Debian)
 
-## ⚙️ 环境变量配置 (.env)
+如果你有一台全新的服务器，只需遵循以下三个步骤：
 
-你可以通过设置环境变量来个性化你的快递柜：
+### 第一步：安装环境 (Node.js)
+```bash
+# 安装 Node.js 18+ (如果没装)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
 
-| 变量名 | 描述 | 默认值 |
+### 第二步：下载与部署
+```bash
+# 下载本项目
+git clone <仓库地址>
+cd react-example
+
+# 安装依赖 & 构建前端
+npm install
+npm run build
+```
+
+### 第三步：使用 FE 工具一键管理 (推荐)
+输入以下两条命令，即可通过直观的中文菜单管理项目：
+```bash
+chmod +x fe.sh
+./fe.sh
+```
+> **提示**：建议设置快捷命令。输入 `./fe.sh` 选择“项目配置”后，可以自动计算合理的推荐容量配额。
+
+---
+
+## 🛡️ 安全与稳定性 (面向技术爱好者)
+
+本系统不仅追求好用，更在底层设计上考虑了稳定性和安全性：
+
+1.  **物理加密 (AES-256-GCM)**：
+    私密文件并非直接存入硬盘，而是通过工业级加密算法加密后存储。即便黑客拿到了你的 `local_storage` 文件夹，没有密钥也无法还原任何文件。
+2.  **全自动限流 (Anti-Abuse)**：
+    为了防止被恶意脚本刷上传接口，系统内置了 **IP 频率限制**：单个 IP 每小时默认限制上传 20 次。
+3.  **动态熔断机制**：
+    实时监控服务器磁盘占用。一旦空间即将耗尽，系统会触发：
+    *   **自动清理**：优先删除所有已过期的非法文件。
+    *   **上传保护**：若清理后依然空间不足，将暂时禁止新上传，防止服务器宕机。
+4.  **FE CLI 管理**：
+    无需手动改 `.env`。输入 `./fe.sh` 即可查看当前配置、重置数据库、监控存储状态。
+
+---
+
+## ☁️ 关于 Cloudflare 部署
+
+**本项目支持两种方式与 Cloudflare 协同工作：**
+
+### 1. 穿透代理 (最简单)
+如果你是在内网服务器（如家里或公司内网）运行 Node.js，使用 **Cloudflare Tunnel (cloudflared)** 是最佳选择。它可以直接将本地 3000 端口映射到全球域名，无需公网 IP 和复杂的防火墙配置。
+
+### 2. 深度迁移 (Workers / D1 / R2)
+如果你想把后端完全托管在 Cloudflare 边缘端：
+*   **当前代码**是基于 Node.js 标准版优化的，由于 Workers 没有本地文件系统，你需要将代码中 `getLocalFile` / `saveLocalFile` 逻辑修改为调用 **Cloudflare R2**（对象存储）。
+*   元数据管理可以轻松适配 **Cloudflare D1** (SQLite)。
+*   **本项目代码结构已按存储与逻辑分离编写，迁移成本极低。**
+
+---
+
+## ⚙️ 环境变量速查
+
+| 变量名 | 默认值 | 说明 |
 | :--- | :--- | :--- |
-| `APP_NAME` | 项目名称 | File Express |
-| `APP_SUBTITLE` | 首页副标题 | 极简、安全、临时的文件传输中心 |
-| `MAX_SINGLE_FILE_SIZE_MB` | 普通文件大小限制 (MB) | 10 |
-| `MAX_ZIP_SIZE_MB` | ZIP 压缩包大小限制 (MB) | 50 |
-| `MAX_TOTAL_STORAGE_MB` | 全局存储容量配额 (MB) | 1024 |
-| `STORAGE_ENCRYPTION_KEY` | **关键：AES 加密密钥** | (随机 UUID) |
-
-> **注意**：如果修改了 `STORAGE_ENCRYPTION_KEY`，之前已存入的旧文件将因无法解密而失效，请在初始化项目时即设置好该值。
-
-## 🚀 部署方案详解
-
-### 方案 A: 标准 VPS / 云服务器 (Node.js)
-这是最稳健且支持大文件存储（超过 KV 限制）的推荐方式。
-
-1. **准备环境**: 确保服务器安装了 Node.js 18+。
-2. **克隆代码到服务器**:
-   ```bash
-   git clone <你的项目仓库地址>
-   cd file-express
-   ```
-3. **安装依赖与构建**:
-   ```bash
-   npm install
-   npm run build
-   ```
-4. **配置环境变量**: 
-   创建并修改 `.env` 文件，特别是设置 `STORAGE_ENCRYPTION_KEY` 为一个持久的随机字符串。
-5. **使用 PM2 持久化运行**:
-   ```bash
-   # 安装 PM2
-   npm install -g pm2
-   # 启动项目
-   pm2 start dist/server.cjs --name "file-express"
-   ```
-6. **反向代理 (可选推荐)**: 建议使用 Nginx 将 80/443 端口转发到 3000 端口，并配置 SSL 证书。
+| `STORAGE_ENCRYPTION_KEY` | (自动生成) | **极其重要**：文件加密的钥匙。请妥善保存。 |
+| `MAX_TOTAL_STORAGE_MB` | 1024 (1GB) | 服务器总配额上限。可在 FE 菜单自动配置。 |
+| `MAX_SINGLE_FILE_SIZE_MB` | 10 | 允许上传的单个文件最大体积。 |
 
 ---
 
-### 方案 B: Cloudflare 生态 (Pages + Workers + D1)
-由于 Cloudflare Workers 环境的特殊性（无本地文件系统），需要对后端逻辑做轻微适配。
+## 📦 常见问题 (FAQ)
 
-#### 1. 前端部署 (Cloudflare Pages)
-- 将本项目关联至 Cloudflare Pages。
-- 构建设置:
-  - Framework preset: `Vite`
-  - Build command: `npm run build`
-  - Output directory: `dist`
-
-#### 2. 后端部署 (Cloudflare Workers)
-- **数据库 (D1)**: 在控制台创建 D1 数据库，并在 Worker 中绑定。修改 `dbOperation` 使用 `env.DB.prepare(...)`。
-- **对象存储 (KV/R2)**:
-  - 对于小文件 (<25MB) 或元数据，可使用 **KV**。
-  - 对于大文件，必须使用 **R2**。修改 `saveLocalFile` 为 `env.BUCKET.put(id, buffer)`。
-- **适配层**: 由于 Workers 不支持 `express.listen`，建议使用 `hono` 或转换器将 Express 应用包装为 Fetch Handler。
-
-#### 3. 环境变量
-在 Cloudflare Dashboard 的 Workers 设置中添加：
-- `STORAGE_ENCRYPTION_KEY`: 用于 AES 加密。
+*   **忘记了加密密钥怎么办？**
+    如果密钥丢失，之前存入的私密文件将永远无法解密。请务必在 `FE` 菜单中确认您的密钥已备份。
+*   **如何修改访问地址？**
+    如果您使用了 CDN 或反向代理，请修改 `.env` 中的 `APP_URL` 变量，这会影响取件码分享链接的生成。
 
 ---
 
-## 🚀 快速启动 (本地开发)
+## 💻 本地开发 (VSCode + nvm)
 
-1. **安装依赖**: `npm install`
-2. **构建项目**: `npm run build`
-3. **启动服务**: `npm start` (默认端口 3000)
+如果您想在自己的电脑上运行或调试：
 
-## 📄 许可与版权
-本项目作者为 **adou**。代码逻辑清晰，适合作为个人临时传件工具或学习全栈开发的参考案例。
+1. **准备环境**:
+   ```bash
+   nvm install 18
+   nvm use 18
+   ```
+2. **安装运行**:
+   - `npm install` (安装依赖)
+   - `npm run build` (构建)
+   - `npm start` (启动服务)
+3. **调试模式**: 运行 `npm run dev`，前端将支持 HMR 热更新。
+
+---
+
+## 🗑️ 安装、卸载与重置
+
+### 1. 如何安装
+请参考顶部的 [🚀 傻瓜式部署教程](#-傻瓜式部署教程-vps--ubuntu--debian)。核心在于 `npm run build` 生成构建产物，以及使用 `./fe.sh` 进行初始化配置。
+
+### 2. 如何重置或“软件卸载”
+如果你想清空所有文件记录并重新开始：
+- **方案 A (推荐)**: 运行 `./fe.sh` 并选择 **选项 2 (数据库与环境重置)**。这会安全地删除 `.env`(配置)、`local_db.json`(记录) 和 `local_storage`(物理文件)。
+- **方案 B (彻底删除)**: 直接在终端执行 `rm -rf <项目目录>` 即可。由于本项目是绿色免安装的（仅运行在 Node.js 环境中），删除目录即代表彻底卸载，不会在系统留下任何残留。
+
+---
+**许可协议**：本项目仅供学习与个人使用。严禁用于存储任何非法合规内容。
