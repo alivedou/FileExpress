@@ -38,3 +38,10 @@ Make the script executable and run it:
 chmod +x fe.sh
 ./fe.sh
 ```
+
+**5. Uninstall Application**  
+To remove the application and all its data, simply delete the directory:
+```bash
+cd ..
+rm -rf FileExpress
+```
