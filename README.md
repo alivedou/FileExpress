@@ -49,5 +49,21 @@ npm start      # Run production server
 - **To Reset Data**: Run `./fe.sh` and select **Option 2 (Full System Reset)**. This deletes all files, database records, and configuration.
 - **To Uninstall**: Simply delete the project folder (`rm -rf FileExpress`). The app is portable and leaves no system traces.
 
+## ❓ Troubleshooting (Cloud IDEs/ChainIDE)
+If you are running this in a **Cloud IDE (ChainIDE, Gitpod, etc.)**:
+
+### 1. SSL handshake failed (Error 525)
+This happens because the IDE's proxy expects HTTPS from your app.
+- **Fix**: Manually change the URL in your browser from `https://...` to **`http://...`**.
+- **Alternative**: Check your IDE's "Port Forwarding" settings and ensure the protocol for Port 3000 is set to **HTTP** (not HTTPS).
+
+### 2. Blocked Request / Allowed Hosts
+If you see "This host is not allowed":
+- Open `vite.config.ts` and ensure `server.allowedHosts` is set to `true` (it is now set by default in this repo).
+
+### 3. URL Access
+- **Host Binding**: The app already binds to `0.0.0.0`, which is required.
+- **Preview Button**: Use the IDE's built-in "Open Preview" or "Browser" button to get the correct proxied URL.
+
 ---
 **License**: For educational and personal use only.
