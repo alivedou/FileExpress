@@ -236,6 +236,56 @@ stop_app_bg() {
     sleep 1.5
 }
 
+# 高级选项
+advanced_options() {
+    while true; do
+        clear
+        echo -e "${BLUE}========================================"
+        echo -e "              高级选项                   "
+        echo -e "=======================================${NC}"
+        echo -e "1. ${GREEN}安装全局系统命令 'fe'${NC} (支持随处唤出面板)"
+        echo -e "2. ${RED}完全干净卸载整个应用${NC} (一键自毁全量清理)"
+        echo -e "----------------------------------------"
+        echo -e "q. 返回上级菜单"
+        echo -e "----------------------------------------"
+        read -p "请选择 (1-2, q): " adv_choice
+        case $adv_choice in
+            1)
+                echo -e "${YELLOW}如提示输入密码，请输入当前用户的 sudo 密码。${NC}"
+                sudo ln -sf "$(pwd)/fe.sh" /usr/local/bin/fe
+                if [ $? -eq 0 ]; then
+                    echo -e "${GREEN}安装成功！以后在系统任何位置输入 'fe' 即可呼出本管理面板。${NC}"
+                else
+                    echo -e "${RED}安装失败，您需要自行尝试执行：sudo ln -sf $(pwd)/fe.sh /usr/local/bin/fe${NC}"
+                fi
+                read -p "按回车键继续..." dummy
+                ;;
+            2)
+                echo -e "${RED}【极端警告】此操作将：${NC}"
+                echo -e "1. 强制停止所有后台传输服务"
+                echo -e "2. 永久删除所有数据库和文件缓存"
+                echo -e "3. 删除系统级快捷命令"
+                echo -e "4. 删除整个项目目录！此操作完全不可逆！"
+                read -p "类型 'CONFIRM' 确认执行自我销毁: " confirm
+                if [ "$confirm" == "CONFIRM" ]; then
+                    echo -e "${YELLOW}正在中止相关进程...${NC}"
+                    if [ -f "app.pid" ]; then
+                        kill $(cat app.pid) 2>/dev/null
+                    fi
+                    sudo rm -f /usr/local/bin/fe
+                    echo -e "${YELLOW}调度自毁任务中... 再见！${NC}"
+                    local app_path=$(pwd)
+                    cd ..
+                    rm -rf "$app_path"
+                    exit 0
+                fi
+                ;;
+            q) break ;;
+            *) echo -e "${RED}无效选择${NC}" ; sleep 1 ;;
+        esac
+    done
+}
+
 # 主循环
 while true; do
     clear
@@ -243,13 +293,14 @@ while true; do
     echo -e "    File Express 管理工具 (FE CLI)     "
     echo -e "=======================================${NC}"
     echo -e "1. ${GREEN}项目配置${NC} (环境变量与限额)"
-    echo -e "2. ${YELLOW}数据库初始化${NC} (清空数据)"
+    echo -e "2. ${YELLOW}数据库初始化${NC} (清空已有数据)"
     echo -e "3. ${BLUE}前台运行测试${NC} (Ctrl+C 退出)"
-    echo -e "4. ${GREEN}后台稳定运行${NC} (静默挂载)"
-    echo -e "5. ${RED}停止后台运行${NC} (终结进程)"
-    echo -e "6. 退出菜单"
+    echo -e "4. ${GREEN}后台稳定运行${NC} (系统静默挂载)"
+    echo -e "5. ${RED}停止后台运行${NC} (终结挂载进程)"
+    echo -e "6. ${BLUE}高级选项${NC} (全局命令/全量卸载)"
+    echo -e "7. 退出菜单"
     echo -e "----------------------------------------"
-    read -p "请选择 (1-6): " main_choice
+    read -p "请选择 (1-7): " main_choice
 
     case $main_choice in
         1) project_config ;;
@@ -257,7 +308,8 @@ while true; do
         3) run_app false ;;
         4) run_app true ;;
         5) stop_app_bg ;;
-        6) echo "再见！" ; exit 0 ;;
-        *) echo -e "${RED}无效选择 (1-6)${NC}" ; sleep 1 ;;
+        6) advanced_options ;;
+        7) echo "再见！" ; exit 0 ;;
+        *) echo -e "${RED}无效选择 (1-7)${NC}" ; sleep 1 ;;
     esac
 done

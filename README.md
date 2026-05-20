@@ -46,11 +46,14 @@ chmod +x fe.sh
 > - `MAX_TOTAL_STORAGE_MB`: Overall max disk usage to prevent system overload.
 
 **5. Uninstall Application**  
-To remove the application and all its data, simply delete the directory:
+To permanently remove the application, all stored files, and its background processes, use the built-in self-destruct option:
 ```bash
-cd ..
-rm -rf FileExpress
+./fe.sh
+# Select option: 6. 高级选项 (Advanced Options)
+# Select option: 2. 完全干净卸载整个应用 (Clean Uninstall)
+# Type CONFIRM
 ```
+*Alternatively, you can manually stop the process and delete the directory if needed.*
 
 **6. Deployment Guide**  
 You can easily deploy File Express in various robust environments:
