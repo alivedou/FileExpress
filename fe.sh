@@ -71,6 +71,7 @@ project_config() {
         echo -e "5. ZIP 包上限: ${GREEN}${MAX_ZIP_PAYLOAD_SIZE_MB:-50} MB${NC}"
         echo -e "6. 加密密钥  : ${YELLOW}${STORAGE_ENCRYPTION_KEY:-"未设置"}${NC}"
         echo -e "7. 外部访问URL: ${BLUE}${APP_URL:-"未设置 (运行后自动检测)"}${NC}"
+        echo -e "8. 自定义端口: ${GREEN}${APP_PORT:-3000}${NC}"
         echo -e "----------------------------------------"
         echo -e "s. 保存并返回 | q. 直接返回"
         echo -e "----------------------------------------"
@@ -113,6 +114,15 @@ project_config() {
                 read -p "输入加密密钥 (32位佳): " input_val
                 [ ! -z "$input_val" ] && save_env_var "STORAGE_ENCRYPTION_KEY" "$input_val"
                 ;;
+            7)
+                read -p "输入外部访问URL (如 http://domain.com): " input_val
+                [ ! -z "$input_val" ] && save_env_var "APP_URL" "$input_val"
+                ;;
+            8)
+                read -p "输入自定义运行端口 (默认 3000): " input_val
+                [ -z "$input_val" ] && input_val=3000
+                save_env_var "APP_PORT" "$input_val"
+                ;;
             s|q) break ;;
             *) echo -e "${RED}无效选择${NC}" ; sleep 1 ;;
         esac
@@ -143,16 +153,17 @@ init_database() {
 
 # 3. 运行应用
 run_app() {
+    local bg_mode=${1:-false}
     load_env
     clear
     echo -e "${GREEN}>>> 正在启动文件快递柜...${NC}"
     
     # 尝试获取本机 IP
     local local_ip=$(hostname -I | awk '{print $1}')
-    local port=${PORT:-3000}
+    local port=${APP_PORT:-3000}
     
     echo -e "${BLUE}========================================"
-    echo -e "      APPLICATION IS RUNNING           "
+    echo -e "      APPLICATION STARTUP SEQUENCE      "
     echo -e "=======================================${NC}"
     echo -e "本地网地址: ${GREEN}http://$local_ip:$port${NC}"
     if [ ! -z "$APP_URL" ]; then
@@ -160,7 +171,6 @@ run_app() {
     fi
     echo -e "手机扫码或浏览器访问上方地址即可使用。"
     echo -e "----------------------------------------"
-    echo -e "日志输出 (Ctrl+C 暂停运行并返回菜单):"
     
     # 自动安装依赖和构建
     if [ ! -d "node_modules" ]; then
@@ -172,21 +182,52 @@ run_app() {
         npm run build
     fi
     
-    # 启动 Node 应用挂载到后台
-    npm start &
-    APP_PID=$!
-    
-    # 捕获 Ctrl+C 并优雅关闭进程
-    trap "echo -e '\n${YELLOW}检测到 Ctrl+C，正在停止应用...${NC}'; kill $APP_PID 2>/dev/null; sleep 1; return" SIGINT
+    if [ "$bg_mode" = true ]; then
+        echo -e "日志输出已重定向至: ${YELLOW}app.log${NC}"
+        echo -e "${GREEN}应用已在后台稳定运行。${NC}"
+        # 关掉任何已有的 PM2 或 nohup 残留 (如果有) 的提示，这里直接 nohup
+        nohup npm start > app.log 2>&1 &
+        echo $! > app.pid
+        echo -e "（提示：可随时通过 'kill $(cat app.pid)' 或通过 FE 菜单停止服务）"
+        read -p "按回车键返回主菜单..." dummy
+    else
+        echo -e "日志输出 (Ctrl+C 暂停运行并返回菜单):"
+        # 启动 Node 应用挂载到前台
+        npm start &
+        APP_PID=$!
+        
+        # 捕获 Ctrl+C 并优雅关闭进程
+        trap "echo -e '\n${YELLOW}检测到 Ctrl+C，正在停止应用...${NC}'; kill $APP_PID 2>/dev/null; sleep 1; return" SIGINT
 
-    # 等待后台应用进程结束
-    wait $APP_PID
-    
-    # 恢复 SIGINT 行为
-    trap - SIGINT
-    
-    echo -e "\n${YELLOW}应用已停止运行。${NC}"
-    read -p "按回车键返回主菜单..." dummy
+        # 等待后台应用进程结束
+        wait $APP_PID
+        
+        # 恢复 SIGINT 行为
+        trap - SIGINT
+        
+        echo -e "\n${YELLOW}应用已停止运行。${NC}"
+        read -p "按回车键返回主菜单..." dummy
+    fi
+}
+
+# 停止后台运行
+stop_app_bg() {
+    clear
+    echo -e "${YELLOW}检查后台进程...${NC}"
+    if [ -f "app.pid" ]; then
+        pid=$(cat app.pid)
+        if ps -p $pid > /dev/null; then
+            kill $pid
+            echo -e "${GREEN}已成功停止后台服务 (PID: $pid)${NC}"
+        else
+            echo -e "后台服务未运行或已被停止。"
+        fi
+        rm -f app.pid
+    else
+        # 尝试暴力按端口或名称杀掉
+        echo -e "未找到 app.pid 记录，应用可能未在后台运行。"
+    fi
+    sleep 1.5
 }
 
 # 主循环
@@ -197,16 +238,20 @@ while true; do
     echo -e "=======================================${NC}"
     echo -e "1. ${GREEN}项目配置${NC} (环境变量与限额)"
     echo -e "2. ${YELLOW}数据库初始化${NC} (清空数据)"
-    echo -e "3. ${BLUE}运行 APP${NC} (启动并显示访问地址)"
-    echo -e "4. 退出运行"
+    echo -e "3. ${BLUE}前台运行测试${NC} (Ctrl+C 退出)"
+    echo -e "4. ${GREEN}后台稳定运行${NC} (静默挂载)"
+    echo -e "5. ${RED}停止后台运行${NC} (终结进程)"
+    echo -e "6. 退出菜单"
     echo -e "----------------------------------------"
-    read -p "请选择 (1-4): " main_choice
+    read -p "请选择 (1-6): " main_choice
 
     case $main_choice in
         1) project_config ;;
         2) init_database ;;
-        3) run_app ;;
-        4) echo "再见！" ; exit 0 ;;
-        *) echo -e "${RED}无效选择 (1-4)${NC}" ; sleep 1 ;;
+        3) run_app false ;;
+        4) run_app true ;;
+        5) stop_app_bg ;;
+        6) echo "再见！" ; exit 0 ;;
+        *) echo -e "${RED}无效选择 (1-6)${NC}" ; sleep 1 ;;
     esac
 done
