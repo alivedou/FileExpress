@@ -72,6 +72,7 @@ project_config() {
         echo -e "6. 加密密钥  : ${YELLOW}${STORAGE_ENCRYPTION_KEY:-"未设置"}${NC}"
         echo -e "7. 外部访问URL: ${BLUE}${APP_URL:-"未设置 (运行后自动检测)"}${NC}"
         echo -e "8. 自定义端口: ${GREEN}${APP_PORT:-3000}${NC}"
+        echo -e "9. 最大存储时长: ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
         echo -e "----------------------------------------"
         echo -e "s. 保存并返回 | q. 直接返回"
         echo -e "----------------------------------------"
@@ -122,6 +123,11 @@ project_config() {
                 read -p "输入自定义运行端口 (默认 3000): " input_val
                 [ -z "$input_val" ] && input_val=3000
                 save_env_var "APP_PORT" "$input_val"
+                ;;
+            9)
+                read -p "输入最大存储时长(小时) (默认 24): " input_val
+                [ -z "$input_val" ] && input_val=24
+                save_env_var "MAX_STORAGE_HOURS" "$input_val"
                 ;;
             s|q) break ;;
             *) echo -e "${RED}无效选择${NC}" ; sleep 1 ;;

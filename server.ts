@@ -222,7 +222,8 @@ app.get("/api/config", (req, res) => {
         appName: APP_NAME,
         appSubtitle: APP_SUBTITLE,
         maxSingleFileMB: MAX_SINGLE_FILE_SIZE_MB,
-        maxZipPayloadMB: MAX_ZIP_PAYLOAD_SIZE_MB
+        maxZipPayloadMB: MAX_ZIP_PAYLOAD_SIZE_MB,
+        maxStorageHours: process.env.MAX_STORAGE_HOURS ? parseInt(process.env.MAX_STORAGE_HOURS) : 24
     });
 });
 
@@ -335,7 +336,9 @@ app.post("/api/upload/private", rateLimiter, upload.array("files"), handleMulter
             else attempts++;
         }
 
-        const durationHours = parseInt(req.body.duration) || 24;
+        const inputDuration = parseInt(req.body.duration) || 24;
+        const maxAllowedHours = process.env.MAX_STORAGE_HOURS ? parseInt(process.env.MAX_STORAGE_HOURS) : 24;
+        const durationHours = Math.min(inputDuration, maxAllowedHours);
         const maxDownloads = 5; // 私密柜默认最多提取 5 次，之后即刻销毁
 
         // 文件格式审查

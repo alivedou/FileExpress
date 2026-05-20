@@ -735,11 +735,14 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                 <p className="text-[12px] font-bold text-[var(--text-secondary)]">{t.durationLabel}</p>
               </div>
               <div className="grid grid-cols-4 gap-2">
-                {["2", "6", "12", "24"].map(h => (
+                {Array.from(new Set(["2", "6", "12", config?.maxStorageHours ? Math.max(24, config.maxStorageHours).toString() : "24"])).map((h, i, arr) => {
+                   if (i > 0 && h === arr[i-1]) return null;
+                   return (
                    <button key={h} type="button" onClick={() => setDuration(h)} className={`py-2 text-[13px] font-bold border rounded-lg transition-all ${duration === h ? "bg-[var(--accent)] text-white border-transparent shadow-md" : "border-[var(--border-color)] hover:border-[var(--accent)]"}`}>
                      {h}h
                    </button>
-                ))}
+                   );
+                })}
               </div>
            </div>
          </div>
