@@ -172,8 +172,18 @@ run_app() {
         npm run build
     fi
     
-    # 启动 Node 应用
-    npm start
+    # 启动 Node 应用挂载到后台
+    npm start &
+    APP_PID=$!
+    
+    # 捕获 Ctrl+C 并优雅关闭进程
+    trap "echo -e '\n${YELLOW}检测到 Ctrl+C，正在停止应用...${NC}'; kill $APP_PID 2>/dev/null; sleep 1; return" SIGINT
+
+    # 等待后台应用进程结束
+    wait $APP_PID
+    
+    # 恢复 SIGINT 行为
+    trap - SIGINT
     
     echo -e "\n${YELLOW}应用已停止运行。${NC}"
     read -p "按回车键返回主菜单..." dummy
