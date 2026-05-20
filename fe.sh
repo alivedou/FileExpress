@@ -73,6 +73,7 @@ project_config() {
         echo -e "7. 外部访问URL: ${BLUE}${APP_URL:-"未设置 (运行后自动检测)"}${NC}"
         echo -e "8. 自定义端口: ${GREEN}${APP_PORT:-3000}${NC}"
         echo -e "9. 最大存储时长: ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
+        echo -e "10. 最大提取次数: ${GREEN}${MAX_DOWNLOADS:-100} 次${NC}"
         echo -e "----------------------------------------"
         echo -e "s. 保存并返回 | q. 直接返回"
         echo -e "----------------------------------------"
@@ -128,6 +129,11 @@ project_config() {
                 read -p "输入最大存储时长(小时) (默认 24): " input_val
                 [ -z "$input_val" ] && input_val=24
                 save_env_var "MAX_STORAGE_HOURS" "$input_val"
+                ;;
+            10)
+                read -p "输入最大允许的提取次数 (默认 100): " input_val
+                [ -z "$input_val" ] && input_val=100
+                save_env_var "MAX_DOWNLOADS" "$input_val"
                 ;;
             s|q) break ;;
             *) echo -e "${RED}无效选择${NC}" ; sleep 1 ;;
@@ -251,12 +257,27 @@ advanced_options() {
         read -p "请选择 (1-2, q): " adv_choice
         case $adv_choice in
             1)
-                echo -e "${YELLOW}如提示输入密码，请输入当前用户的 sudo 密码。${NC}"
-                sudo ln -sf "$(pwd)/fe.sh" /usr/local/bin/fe
+                echo -e "${YELLOW}正在尝试安装全局命令...${NC}"
+                # 尝试使用 sudo 安装到 /usr/local/bin
+                sudo -n ln -sf "$(pwd)/fe.sh" /usr/local/bin/fe 2>/dev/null || ln -sf "$(pwd)/fe.sh" /usr/local/bin/fe 2>/dev/null
                 if [ $? -eq 0 ]; then
-                    echo -e "${GREEN}安装成功！以后在系统任何位置输入 'fe' 即可呼出本管理面板。${NC}"
+                    echo -e "${GREEN}安装成功！已安装至 /usr/local/bin/fe${NC}"
+                    echo -e "${GREEN}以后在系统任何位置输入 'fe' 即可呼出本管理面板。${NC}"
                 else
-                    echo -e "${RED}安装失败，您需要自行尝试执行：sudo ln -sf $(pwd)/fe.sh /usr/local/bin/fe${NC}"
+                    echo -e "${YELLOW}无法写入 /usr/local/bin，尝试安装至当前用户目录...${NC}"
+                    mkdir -p "$HOME/.local/bin"
+                    ln -sf "$(pwd)/fe.sh" "$HOME/.local/bin/fe"
+                    if [ $? -eq 0 ]; then
+                        echo -e "${GREEN}命令已链接至 $HOME/.local/bin/fe${NC}"
+                        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+                            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+                            echo -e "${YELLOW}请执行命令：source ~/.bashrc 以激活路径变量，然后再输入 'fe'！${NC}"
+                        else
+                            echo -e "${GREEN}以后在系统任何位置输入 'fe' 即可呼出本管理面板。${NC}"
+                        fi
+                    else
+                        echo -e "${RED}安装失败... 请手动使用别名或直接运行 ./fe.sh${NC}"
+                    fi
                 fi
                 read -p "按回车键继续..." dummy
                 ;;

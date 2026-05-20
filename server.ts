@@ -223,7 +223,8 @@ app.get("/api/config", (req, res) => {
         appSubtitle: APP_SUBTITLE,
         maxSingleFileMB: MAX_SINGLE_FILE_SIZE_MB,
         maxZipPayloadMB: MAX_ZIP_PAYLOAD_SIZE_MB,
-        maxStorageHours: process.env.MAX_STORAGE_HOURS ? parseInt(process.env.MAX_STORAGE_HOURS) : 24
+        maxStorageHours: process.env.MAX_STORAGE_HOURS ? parseInt(process.env.MAX_STORAGE_HOURS) : 24,
+        maxDownloads: process.env.MAX_DOWNLOADS ? parseInt(process.env.MAX_DOWNLOADS) : 100
     });
 });
 
@@ -339,14 +340,17 @@ app.post("/api/upload/private", rateLimiter, upload.array("files"), handleMulter
         const inputDuration = parseInt(req.body.duration) || 24;
         const maxAllowedHours = process.env.MAX_STORAGE_HOURS ? parseInt(process.env.MAX_STORAGE_HOURS) : 24;
         const durationHours = Math.min(inputDuration, maxAllowedHours);
-        const maxDownloads = 5; // 私密柜默认最多提取 5 次，之后即刻销毁
+        
+        const maxAllowedDownloads = process.env.MAX_DOWNLOADS ? parseInt(process.env.MAX_DOWNLOADS) : 100;
+        const inputDownloads = parseInt(req.body.maxDownloads);
+        const maxDownloads = (isNaN(inputDownloads) || inputDownloads < 1) ? 5 : Math.min(inputDownloads, maxAllowedDownloads);
 
         // 文件格式审查
-        const allowedExtensions = [".jpg", ".jpeg", ".png", ".txt", ".md", ".zip"];
+        const allowedExtensions = [".jpg", ".jpeg", ".png", ".txt", ".md", ".zip", ".rar", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"];
         for (const file of files) {
             const ext = path.extname(file.originalname).toLowerCase();
             if (!allowedExtensions.includes(ext)) {
-                return res.status(400).json({ error: `格式不支持: ${ext}。 仅支持: .jpg, .png, .txt, .md, .zip` });
+                return res.status(400).json({ error: `格式不支持: ${ext}。 仅支持图片、文本、办公文档及压缩包(.zip/.rar)` });
             }
         }
 

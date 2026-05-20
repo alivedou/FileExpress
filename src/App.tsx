@@ -25,9 +25,10 @@ const translations = {
     publicLabel: "内容 (.txt 文字分享)",
     privateLabel: "选择文件",
     zipHint: "压缩包 < 50MB, 其他 < 5MB",
-    typeHint: "允许类型: .jpg, .png, .txt, .md, .zip",
+    typeHint: "允许类型: 图片、文本、文档、压缩包",
     dragHint: "拖拽文件至此或点击上传",
     durationLabel: "保存时长",
+    downloadsLabel: "提取次数",
     engage: "确认存入",
     processing: "正在处理...",
     success: "存入成功",
@@ -72,9 +73,10 @@ const translations = {
     publicLabel: "Paste text content here",
     privateLabel: "Select Files",
     zipHint: "Size limits depend on server config",
-    typeHint: "Allowed: .jpg, .png, .txt, .md, .zip",
+    typeHint: "Allowed: images, texts, docs, zips",
     dragHint: "Drag files here or click to upload",
     durationLabel: "Storage Duration",
+    downloadsLabel: "Max Downloads",
     engage: "Confirm & Drop",
     processing: "Processing...",
     success: "Success",
@@ -468,7 +470,8 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
   const [files, setFiles] = useState<File[]>([]); // 物理文件数组
   const [title, setTitle] = useState(""); // 公开分享标题
   const [content, setContent] = useState(""); // 公开分享文本内容
-  const [duration, setDuration] = useState("24"); // 保存时长
+  const [duration, setDuration] = useState("2"); // 保存时长
+  const [downloads, setDownloads] = useState("5"); // 最大下载次数
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<any>(null); // 上传成功结果存储（包含 ID 或 提取码）
@@ -534,6 +537,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
         }
 
         fd.append('duration', duration);
+        fd.append('maxDownloads', downloads);
       }
       const res = await fetch(`/api/upload/${type}`, { method: 'POST', body: fd });
       const data = await res.json();
@@ -729,20 +733,24 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
               />
            </div>
 
-           {/* 时间选择网格 */}
-           <div className="space-y-3">
-              <div className="flex justify-between items-center px-1">
-                <p className="text-[12px] font-bold text-[var(--text-secondary)]">{t.durationLabel}</p>
+           {/* 时间与次数并排输入框 */}
+           <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-[12px] font-bold text-[var(--text-secondary)]">{t.durationLabel} (h)</p>
+                <div className="flex items-center border border-[var(--border-color)] rounded-lg overflow-hidden h-11 transition-colors focus-within:border-[var(--accent)]">
+                  <button type="button" onClick={() => setDuration(String(Math.max(1, (parseInt(duration) || 0) - 1)))} className="px-3 md:px-4 h-full text-[14px] font-bold hover:bg-[var(--bg-secondary)] active:bg-[var(--accent)] active:text-white transition-colors select-none">-</button>
+                  <input type="number" min="1" max={config?.maxStorageHours || 24} value={duration} onChange={(e) => setDuration(e.target.value)} className="w-full h-full text-center bg-transparent text-[13px] font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <button type="button" onClick={() => setDuration(String(Math.min(config?.maxStorageHours || 24, (parseInt(duration) || 0) + 1)))} className="px-3 md:px-4 h-full text-[14px] font-bold hover:bg-[var(--bg-secondary)] active:bg-[var(--accent)] active:text-white transition-colors select-none">+</button>
+                </div>
               </div>
-              <div className="grid grid-cols-4 gap-2">
-                {Array.from(new Set(["2", "6", "12", config?.maxStorageHours ? Math.max(24, config.maxStorageHours).toString() : "24"])).map((h, i, arr) => {
-                   if (i > 0 && h === arr[i-1]) return null;
-                   return (
-                   <button key={h} type="button" onClick={() => setDuration(h)} className={`py-2 text-[13px] font-bold border rounded-lg transition-all ${duration === h ? "bg-[var(--accent)] text-white border-transparent shadow-md" : "border-[var(--border-color)] hover:border-[var(--accent)]"}`}>
-                     {h}h
-                   </button>
-                   );
-                })}
+
+              <div className="space-y-2">
+                <p className="text-[12px] font-bold text-[var(--text-secondary)]">{t.downloadsLabel}</p>
+                <div className="flex items-center border border-[var(--border-color)] rounded-lg overflow-hidden h-11 transition-colors focus-within:border-[var(--accent)]">
+                  <button type="button" onClick={() => setDownloads(String(Math.max(1, (parseInt(downloads) || 0) - 1)))} className="px-3 md:px-4 h-full text-[14px] font-bold hover:bg-[var(--bg-secondary)] active:bg-[var(--accent)] active:text-white transition-colors select-none">-</button>
+                  <input type="number" min="1" max={config?.maxDownloads || 100} value={downloads} onChange={(e) => setDownloads(e.target.value)} className="w-full h-full text-center bg-transparent text-[13px] font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <button type="button" onClick={() => setDownloads(String(Math.min(config?.maxDownloads || 100, (parseInt(downloads) || 0) + 1)))} className="px-3 md:px-4 h-full text-[14px] font-bold hover:bg-[var(--bg-secondary)] active:bg-[var(--accent)] active:text-white transition-colors select-none">+</button>
+                </div>
               </div>
            </div>
          </div>
