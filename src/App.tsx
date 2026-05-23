@@ -489,7 +489,8 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
         ? `${window.location.origin}${result.url}`
         : `${window.location.origin}/?pickup=${result.pickupCode}`;
       
-      QRCode.toDataURL(url, { margin: 2, width: 256, color: { dark: '#06b6d4', light: '#ffffff00' } })
+      // 使用极速识别配色：高对比度深色 (Slate 900) 配合不透明纯白背景 (#ffffff)，并且提供 2 格标准安全留白
+      QRCode.toDataURL(url, { margin: 2, width: 280, color: { dark: '#0f172a', light: '#ffffff' } })
         .then(data => setQrCodeUrl(data))
         .catch(err => console.error(err));
     }
@@ -587,8 +588,9 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
           </div>
           
           {qrCodeUrl ? (
-            <div className="bg-white p-1.5 sm:p-2 rounded-xl shadow-sm shrink-0 border border-black/5 transform rotate-2 hover:rotate-0 hover:scale-105 transition-all cursor-pointer">
-              <img src={qrCodeUrl} alt="QR Code" className="w-16 h-16 sm:w-20 sm:h-20" />
+            <div className="bg-white p-1 sm:p-1.5 rounded-xl shadow-md shrink-0 border border-black/10 transform rotate-1 hover:rotate-0 hover:scale-105 transition-all cursor-pointer">
+              {/* 提高物理显示大小至 w-20 sm:w-24，利于手机摄像头极速对焦检测 */}
+              <img src={qrCodeUrl} alt="QR Code" className="w-20 h-20 sm:w-24 sm:h-24" />
             </div>
           ) : null}
         </div>

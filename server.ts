@@ -473,6 +473,10 @@ app.post("/api/extract", async (req, res) => {
     }
 });
 
+// --- 移动端防刷/双击/Range请求并发去重缓存 ---
+const recentDownloads = new Map<string, number>();
+const DEDUPLICATE_WINDOW_MS = 6000; // 6秒内同IP对同文件的下载只计一次
+
 /**
  * 直接下载接口 (GET)
  * 解决移动端无法处理 Base64 下载的问题
@@ -495,19 +499,41 @@ app.get("/api/download/:code", async (req, res) => {
         const decrypted = decrypt(buffer);
         if (!decrypted) return res.status(500).send("解密失败");
 
+        // ---- 防多重下载/移动端预取/Range请求误吞次数设计 ----
+        const clientIp = ((req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "").split(",")[0]).trim();
+        const dedupKey = `${clientIp}-${record.id}`;
+        const lastTime = recentDownloads.get(dedupKey);
+        const nowMs = now.getTime();
+        
+        let isDuplicate = false;
+        if (lastTime && (nowMs - lastTime < DEDUPLICATE_WINDOW_MS)) {
+            isDuplicate = true;
+            console.log(`[HTTP Deduplicate] 激活移动端并发防刷保护: ${clientIp} 请求文件 ${record.id}，本次跳过计数增加。`);
+        } else {
+            recentDownloads.set(dedupKey, nowMs);
+            // 自动清理旧的去重映射，防内存泄漏
+            for (const [key, val] of recentDownloads.entries()) {
+                if (nowMs - val > 60000) {
+                    recentDownloads.delete(key);
+                }
+            }
+        }
+
         // 设置下载头，防止浏览器尝试预览（如图片或文本）
         res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(record.fileName)}"`);
         res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
         
         // 增加下载次数并销毁
-        const finalLocal = loadLocalDb();
-        if (finalLocal.files[record.id]) {
-            finalLocal.files[record.id].downloadCount++;
-            if (finalLocal.files[record.id].downloadCount >= record.maxDownloads) {
-                if (record.isLocalBinary) deleteLocalFile(record.id);
-                delete finalLocal.files[record.id];
+        if (!isDuplicate) {
+            const finalLocal = loadLocalDb();
+            if (finalLocal.files[record.id]) {
+                finalLocal.files[record.id].downloadCount++;
+                if (finalLocal.files[record.id].downloadCount >= record.maxDownloads) {
+                    if (record.isLocalBinary) deleteLocalFile(record.id);
+                    delete finalLocal.files[record.id];
+                }
+                saveLocalDb(finalLocal);
             }
-            saveLocalDb(finalLocal);
         }
 
         return res.send(decrypted);

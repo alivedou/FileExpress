@@ -170,18 +170,29 @@ run_app() {
     clear
     echo -e "${GREEN}>>> 正在启动文件快递柜...${NC}"
     
-    # 尝试获取本机 IP
+    # 尝试获取本机内网 IP
     local local_ip=$(hostname -I | awk '{print $1}')
+    [ -z "$local_ip" ] && local_ip="127.0.0.1"
     local port=${APP_PORT:-3000}
+    
+    # 极轻量公网 IP 自动检测（带短超时，防阻塞）
+    local public_ip=""
+    if [ -x "$(command -v curl)" ]; then
+        public_ip=$(curl -s --max-time 1.5 ifconfig.me || curl -s --max-time 1.5 ip.sb || curl -s --max-time 1.5 api.ipify.org)
+    fi
     
     echo -e "${BLUE}========================================"
     echo -e "      APPLICATION STARTUP SEQUENCE      "
     echo -e "=======================================${NC}"
-    echo -e "本地网地址: ${GREEN}http://$local_ip:$port${NC}"
-    if [ ! -z "$APP_URL" ]; then
-        echo -e "配置访问址: ${GREEN}$APP_URL${NC}"
+    echo -e "本地内网/虚拟机地址: ${GREEN}http://$local_ip:$port${NC}"
+    if [ ! -z "$public_ip" ]; then
+        echo -e "外部公网推荐访问地址: ${GREEN}http://$public_ip:$port${NC}"
     fi
-    echo -e "手机扫码或浏览器访问上方地址即可使用。"
+    if [ ! -z "$APP_URL" ]; then
+        echo -e "已配置的主访问域名: ${GREEN}$APP_URL${NC}"
+    fi
+    echo -e "手机扫码或浏览器输入上方适合您网络环境的地址即可使用。"
+    echo -e "（提示：若要在非局域网扫码使用，推荐在菜单选择 '项目配置 -> 7. 外部访问URL' 绑定您的公网IP或域名）"
     echo -e "----------------------------------------"
     
     # 自动安装依赖和构建
