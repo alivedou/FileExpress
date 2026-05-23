@@ -4,19 +4,19 @@ A minimalist, secure, and ephemeral file transfer hub.
 
 ## Quick Start
 
-**1. Install Node.js 20**
+**1. Install Node.js (Version 22 LTS or 24 Current Recommended)**
 
 *Option A: Via NVM (Recommended)*
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 source ~/.bashrc # or restart your terminal
-nvm install 20
-nvm use 20
+nvm install 22
+nvm use 22
 ```
 
 *Option B: Direct Installation (Ubuntu/Debian)*
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 
