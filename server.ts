@@ -632,14 +632,34 @@ app.get("/api/files/public", async (req, res) => {
 async function startServer() {
     if (process.env.NODE_ENV !== "production") {
         // 开发环境下挂载 Vite
+        console.log("[File Express] 启动开发环境 Vite 中间件...");
         const vite = await createViteServer({
             server: { middlewareMode: true },
             appType: "spa",
         });
         app.use(vite.middlewares);
     } else {
-        // 生产环境下直接托管静态资源
-        const distPath = path.join(process.cwd(), "dist");
+        // 生产环境下动态且鲁棒地定位 dist 静态资源目录
+        let distPath = path.join(process.cwd(), "dist");
+        if (!fs.existsSync(path.join(distPath, "index.html"))) {
+            distPath = fs.existsSync(path.join(__dirname, "index.html"))
+                ? __dirname
+                : path.join(__dirname, "dist");
+        }
+        
+        console.log(`[File Express] 生产环境已就绪，静态托管路径: ${distPath}`);
+
+        // 静态资源加载监控与诊断中间件
+        app.use((req, res, next) => {
+            if (req.url.startsWith("/assets/")) {
+                const cleanUrl = req.url.split('?')[0];
+                const filePath = path.join(distPath, cleanUrl);
+                const exists = fs.existsSync(filePath);
+                console.log(`[静态资源托管] 请求: ${req.url} | 文件存在性: ${exists} | 解析物理路径: ${filePath}`);
+            }
+            next();
+        });
+
         app.use(express.static(distPath));
         app.get("*", (req, res) => {
             res.sendFile(path.join(distPath, "index.html"));
