@@ -62,3 +62,14 @@ You can easily deploy File Express in various robust environments:
 - **Local & WSL**: Works perfectly out of the box using `./fe.sh`. You can also enter the Advanced Options to install a global `fe` alias, allowing you to evoke the panel from anywhere securely.
 - **VPS Server (Public Node)**: Ideal for a 24/7 public file hub. Utilize the "Background Running" option (Option 4) in the `FE` menu to smoothly daemonize the service on your cloud instance.
 - **Cloudflare Tunnel (Zero Trust)**: Highly recommended for exposing the service without opening firewall ports. Simply install `cloudflared` on your WSL or VPS and tunnel the local `http://localhost:<PORT>` securely to your custom domain.
+
+## FAQ / Troubleshooting
+
+**Q: Styles are missing or WebSocket errors in production?**  
+A: This usually happens if the application is running in "Development Mode" on a public server. 
+1. Run `npm run build` to generate the production bundle.
+2. Run the application using `./fe.sh` or ensure `NODE_ENV=production` is set.
+3. If styles still fail, the `base: './'` relative path (configured in V2.5.0) will handle sub-directory or proxy-path issues.
+
+**Q: Google Fonts resetting connection?**  
+A: In regions like Mainland China, Google service access is blocked. File Express V2.5.0 uses the `fonts.loli.net` mirror by default to ensure stability.
