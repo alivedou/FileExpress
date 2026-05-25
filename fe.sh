@@ -70,10 +70,9 @@ project_config() {
         echo -e "4. 单文件上限: ${GREEN}${MAX_SINGLE_FILE_SIZE_MB:-10} MB${NC}"
         echo -e "5. ZIP 包上限: ${GREEN}${MAX_ZIP_PAYLOAD_SIZE_MB:-50} MB${NC}"
         echo -e "6. 加密密钥  : ${YELLOW}${STORAGE_ENCRYPTION_KEY:-"未设置"}${NC}"
-        echo -e "7. 外部访问URL: ${BLUE}${APP_URL:-"未设置 (运行后自动检测)"}${NC}"
-        echo -e "8. 自定义端口: ${GREEN}${APP_PORT:-3000}${NC}"
-        echo -e "9. 最大存储时长: ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
-        echo -e "10. 最大提取次数: ${GREEN}${MAX_DOWNLOADS:-100} 次${NC}"
+        echo -e "7. 自定义端口: ${GREEN}${APP_PORT:-3000}${NC}"
+        echo -e "8. 最大存储时长: ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
+        echo -e "9. 最大提取次数: ${GREEN}${MAX_DOWNLOADS:-100} 次${NC}"
         echo -e "----------------------------------------"
         echo -e "s. 保存并返回 | q. 直接返回"
         echo -e "----------------------------------------"
@@ -117,20 +116,16 @@ project_config() {
                 [ ! -z "$input_val" ] && save_env_var "STORAGE_ENCRYPTION_KEY" "$input_val"
                 ;;
             7)
-                read -p "输入外部访问URL (如 http://domain.com): " input_val
-                [ ! -z "$input_val" ] && save_env_var "APP_URL" "$input_val"
-                ;;
-            8)
                 read -p "输入自定义运行端口 (默认 3000): " input_val
                 [ -z "$input_val" ] && input_val=3000
                 save_env_var "APP_PORT" "$input_val"
                 ;;
-            9)
+            8)
                 read -p "输入最大存储时长(小时) (默认 24): " input_val
                 [ -z "$input_val" ] && input_val=24
                 save_env_var "MAX_STORAGE_HOURS" "$input_val"
                 ;;
-            10)
+            9)
                 read -p "输入最大允许的提取次数 (默认 100): " input_val
                 [ -z "$input_val" ] && input_val=100
                 save_env_var "MAX_DOWNLOADS" "$input_val"
@@ -192,7 +187,6 @@ run_app() {
         echo -e "已配置的主访问域名: ${GREEN}$APP_URL${NC}"
     fi
     echo -e "手机扫码或浏览器输入上方适合您网络环境的地址即可使用。"
-    echo -e "（提示：若要在非局域网扫码使用，推荐在菜单选择 '项目配置 -> 7. 外部访问URL' 绑定您的公网IP或域名）"
     echo -e "----------------------------------------"
     
     # 自动安装依赖和构建

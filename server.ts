@@ -639,50 +639,24 @@ async function startServer() {
         });
         app.use(vite.middlewares);
     } else {
-        // --- 生产环境路径深度加固 (V2.5.1) ---
-        // 兼容 node server.ts (根目录运行) 和 node dist/server.cjs (编译后运行)
-        const possibleDistPaths = [
+        // --- 生产环境路径寻址 (V2.5.2) ---
+        // 自动适配多种启动路径 (根目录/dist目录)
+        const distPath = [
             path.resolve(process.cwd(), "dist"),
-            path.resolve(__dirname),             // 如果 server.cjs 已经在 dist 内部
-            path.resolve(__dirname, "..", "dist"),
-            path.resolve(__dirname, "dist")
-        ];
+            path.resolve(__dirname, "dist"),
+            path.resolve(__dirname),
+            path.resolve(process.cwd())
+        ].find(p => fs.existsSync(path.join(p, "index.html"))) || path.resolve(process.cwd(), "dist");
 
-        let distPath = possibleDistPaths[0];
-        for (const p of possibleDistPaths) {
-            if (fs.existsSync(path.join(p, "index.html"))) {
-                distPath = p;
-                break;
-            }
-        }
-        
-        console.log(`[File Express Production] 静态托管根目录锁定为: ${distPath}`);
+        console.log(`[File Express] 生产环境静态资源目录: ${distPath}`);
 
-        // 静态资源加载监控与诊断中间件
-        app.use((req, res, next) => {
-            if (req.url.includes("/assets/")) {
-                const cleanUrl = req.url.split('?')[0];
-                const relativePath = cleanUrl.startsWith('/assets/') ? cleanUrl : cleanUrl.substring(cleanUrl.indexOf('/assets/'));
-                const filePath = path.join(distPath, relativePath);
-                
-                if (fs.existsSync(filePath)) {
-                    // 强制设置正确的 MIME 类型，防止云防火墙或代理拦截
-                    if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css');
-                    if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript');
-                } else {
-                    console.error(`[静态资源 404] 无法在物理路径找到文件: ${filePath} (请求原始 URL: ${req.url})`);
-                }
-            }
-            next();
-        });
-
+        // 基础静态托管
         app.use(express.static(distPath, {
-            index: false,
-            immutable: true,
-            cacheControl: true,
-            maxAge: '7d'
+            maxAge: '1d',
+            index: 'index.html'
         }));
 
+        // SPA 降级处理
         app.get("*", (req, res) => {
             res.sendFile(path.join(distPath, "index.html"));
         });
