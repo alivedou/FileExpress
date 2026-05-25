@@ -76,6 +76,8 @@ project_config() {
         echo -e "----------------------------------------"
         echo -e "s. 保存并返回 | q. 直接返回"
         echo -e "----------------------------------------"
+        echo -e "${YELLOW}注: 修改端口后需重启应用生效。${NC}"
+        echo -e "----------------------------------------"
         
         read -p "请输入要修改的项目编号: " cfg_choice
         
@@ -182,9 +184,6 @@ run_app() {
     echo -e "本地内网/虚拟机地址: ${GREEN}http://$local_ip:$port${NC}"
     if [ ! -z "$public_ip" ]; then
         echo -e "外部公网推荐访问地址: ${GREEN}http://$public_ip:$port${NC}"
-    fi
-    if [ ! -z "$APP_URL" ]; then
-        echo -e "已配置的主访问域名: ${GREEN}$APP_URL${NC}"
     fi
     echo -e "手机扫码或浏览器输入上方适合您网络环境的地址即可使用。"
     echo -e "----------------------------------------"
