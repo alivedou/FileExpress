@@ -656,6 +656,8 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
       {type === 'public' ? (
          <div className="space-y-3 sm:space-y-4">
             <input 
+              id="file-title"
+              name="file-title"
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
@@ -672,12 +674,14 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
               </div>
             ) : (
               <textarea 
+                id="file-content"
+                name="file-content"
                 value={content} onChange={e => setContent(e.target.value)}
                 placeholder={t.publicLabel} 
                 className="input-minimal h-32 sm:h-44 resize-none"
               />
             )}
-            <input id="pub-f" type="file" accept=".txt" className="hidden" onChange={e => {
+            <input id="pub-f" name="pub-f" type="file" accept=".txt" className="hidden" onChange={e => {
               if (e.target.files?.[0]) setFiles([e.target.files[0]]);
             }} />
             {!files.length && !content && (
@@ -718,7 +722,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                 )}
               </div>
               <input 
-                id="priv-f" type="file" multiple 
+                id="priv-f" name="priv-f" type="file" multiple 
                 accept=".jpg,.jpeg,.png,.txt,.md,.zip" 
                 className="hidden" 
                 onChange={e => {
@@ -741,7 +745,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                 <p className="text-[12px] font-bold text-[var(--text-secondary)]">{t.durationLabel} (h)</p>
                 <div className="flex items-center border border-[var(--border-color)] rounded-lg overflow-hidden h-11 transition-colors focus-within:border-[var(--accent)]">
                   <button type="button" onClick={() => setDuration(String(Math.max(1, (parseInt(duration) || 0) - 1)))} className="px-3 md:px-4 h-full text-[14px] font-bold hover:bg-[var(--bg-secondary)] active:bg-[var(--accent)] active:text-white transition-colors select-none">-</button>
-                  <input type="number" min="1" max={config?.maxStorageHours || 24} value={duration} onChange={(e) => setDuration(e.target.value)} className="w-full h-full text-center bg-transparent text-[13px] font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <input id="storage-duration" name="storage-duration" type="number" min="1" max={config?.maxStorageHours || 24} value={duration} onChange={(e) => setDuration(e.target.value)} className="w-full h-full text-center bg-transparent text-[13px] font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                   <button type="button" onClick={() => setDuration(String(Math.min(config?.maxStorageHours || 24, (parseInt(duration) || 0) + 1)))} className="px-3 md:px-4 h-full text-[14px] font-bold hover:bg-[var(--bg-secondary)] active:bg-[var(--accent)] active:text-white transition-colors select-none">+</button>
                 </div>
               </div>
@@ -750,7 +754,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                 <p className="text-[12px] font-bold text-[var(--text-secondary)]">{t.downloadsLabel}</p>
                 <div className="flex items-center border border-[var(--border-color)] rounded-lg overflow-hidden h-11 transition-colors focus-within:border-[var(--accent)]">
                   <button type="button" onClick={() => setDownloads(String(Math.max(1, (parseInt(downloads) || 0) - 1)))} className="px-3 md:px-4 h-full text-[14px] font-bold hover:bg-[var(--bg-secondary)] active:bg-[var(--accent)] active:text-white transition-colors select-none">-</button>
-                  <input type="number" min="1" max={config?.maxDownloads || 100} value={downloads} onChange={(e) => setDownloads(e.target.value)} className="w-full h-full text-center bg-transparent text-[13px] font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <input id="max-downloads" name="max-downloads" type="number" min="1" max={config?.maxDownloads || 100} value={downloads} onChange={(e) => setDownloads(e.target.value)} className="w-full h-full text-center bg-transparent text-[13px] font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                   <button type="button" onClick={() => setDownloads(String(Math.min(config?.maxDownloads || 100, (parseInt(downloads) || 0) + 1)))} className="px-3 md:px-4 h-full text-[14px] font-bold hover:bg-[var(--bg-secondary)] active:bg-[var(--accent)] active:text-white transition-colors select-none">+</button>
                 </div>
               </div>
@@ -859,6 +863,8 @@ function PickupForm({ t }: { t: any }) {
       {/* 密码输入框：支持限制 6 位数字，并带有打字机样式的交互 */}
       <div className="relative group">
         <input 
+          id="pickup-code"
+          name="pickup-code"
           placeholder="000000"
           value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
           className="w-full text-center text-4xl sm:text-6xl font-mono tracking-[0.2em] sm:tracking-[0.4em] font-black border-b-[3px] border-[var(--border-color)] py-8 bg-transparent focus:outline-none focus:border-[var(--accent)] transition-all placeholder:opacity-5 italic"
