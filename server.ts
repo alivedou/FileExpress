@@ -5,6 +5,7 @@
  */
 import express from "express";
 import path from "path";
+import "dotenv/config";
 import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import AdmZip from "adm-zip";
@@ -224,7 +225,8 @@ app.get("/api/config", (req, res) => {
         maxSingleFileMB: MAX_SINGLE_FILE_SIZE_MB,
         maxZipPayloadMB: MAX_ZIP_PAYLOAD_SIZE_MB,
         maxStorageHours: process.env.MAX_STORAGE_HOURS ? parseInt(process.env.MAX_STORAGE_HOURS) : 24,
-        maxDownloads: process.env.MAX_DOWNLOADS ? parseInt(process.env.MAX_DOWNLOADS) : 100
+        maxDownloads: process.env.MAX_DOWNLOADS ? parseInt(process.env.MAX_DOWNLOADS) : 100,
+        encryptionStatus: !!process.env.STORAGE_ENCRYPTION_KEY // 告诉前端是否配置了加密密钥
     });
 });
 

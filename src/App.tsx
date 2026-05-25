@@ -24,7 +24,7 @@ const translations = {
     private: "私密柜",
     publicLabel: "内容 (.txt 文字分享)",
     privateLabel: "选择文件",
-    zipHint: "压缩包 < 50MB, 其他 < 5MB",
+    zipHint: (zip: number, single: number) => `包体积上限: ${zip}MB / 单文件: ${single}MB`,
     typeHint: "允许类型: 图片、文本、文档、压缩包",
     dragHint: "拖拽文件至此或点击上传",
     durationLabel: "保存时长",
@@ -72,7 +72,7 @@ const translations = {
     private: "Private",
     publicLabel: "Paste text content here",
     privateLabel: "Select Files",
-    zipHint: "Size limits depend on server config",
+    zipHint: (zip: number, single: number) => `ZIP Limit: ${zip}MB / Single: ${single}MB`,
     typeHint: "Allowed: images, texts, docs, zips",
     dragHint: "Drag files here or click to upload",
     durationLabel: "Storage Duration",
@@ -250,6 +250,32 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchParams] = useSearchParams();
 
+  // 动态更新使用说明
+  const dynamicNotice = useMemo(() => {
+    if (!config) return t.noticeFull;
+    const hours = config.maxStorageHours || 24;
+    const downloads = config.maxDownloads || 100;
+    const zip = config.maxZipPayloadMB || 50;
+    
+    if (lang === 'zh') {
+      return `【 使用说明 】
+1. 压缩包总限制 ${zip} MB。
+2. 所有私密文件均通过 AES-256 加密存储。
+3. 私密文件达到设定的提取次数 (${downloads} 次) 或时长 (${hours} 小时) 后物理销毁。
+4. 公开内容通过 ${config.encryptionStatus ? '服务器安全密钥' : '全局通用密钥'} 加固。
+
+项目作者: adou`;
+    } else {
+      return `【 USAGE GUIDE 】
+1. ZIP total limit: ${zip} MB.
+2. All private files are AES-256 encrypted.
+3. Records destroyed after ${downloads} downloads or ${hours} hours.
+4. Security: ${config.encryptionStatus ? 'Custom Private Keys' : 'Global Keys'} active.
+
+Author: adou`;
+    }
+  }, [t, config, lang]);
+
   // 监听 URL 参数。如果有 ?pickup=123456，自动进入提取模式
   useEffect(() => {
     if (searchParams.get('pickup')) {
@@ -381,7 +407,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
                 <X size={20} className="cursor-pointer opacity-40 hover:opacity-100 hover:text-[var(--accent)]" onClick={() => setShowNotice(false)} />
               </div>
               <div className="text-[11px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap font-mono uppercase tracking-tight">
-                {t.noticeFull}
+                {dynamicNotice}
               </div>
               <div className="mt-8 pt-4 border-t border-[var(--border-color)] text-[8px] opacity-20 text-right">
                 END_OF_TRANSMISSION // VERSION_2.0
@@ -696,7 +722,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
               <div className="flex justify-between w-full text-[10px] uppercase font-bold tracking-tight opacity-50">
                 <span>{t.uploadLimit}</span>
                 <span className="text-[var(--accent)]">
-                  {maxSingle}MB (SINGLE) / {maxZip}MB (ZIP)
+                  {typeof t.zipHint === 'function' ? t.zipHint(maxZip, maxSingle) : t.zipHint}
                 </span>
               </div>
               <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-[var(--border-color)] to-transparent" />
