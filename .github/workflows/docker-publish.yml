@@ -46,7 +46,12 @@ jobs:
           REPO_LOWER=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
           IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           if [ -n "$IMAGE_TAG" ]; then
-            echo "tags=ghcr.io/${OWNER_LOWER}/${REPO_LOWER}:${IMAGE_TAG}"$'\n'"ghcr.io/${OWNER_LOWER}/${REPO_LOWER}:latest" >> $GITHUB_OUTPUT
+            {
+              echo "tags<<EOF"
+              echo "ghcr.io/${OWNER_LOWER}/${REPO_LOWER}:${IMAGE_TAG}"
+              echo "ghcr.io/${OWNER_LOWER}/${REPO_LOWER}:latest"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
           else
             echo "tags=ghcr.io/${OWNER_LOWER}/${REPO_LOWER}:latest" >> $GITHUB_OUTPUT
           fi
