@@ -29,13 +29,13 @@
 3. 执行完后，你会发现多了一个 `dist` 文件夹。这就是你的“成品”。
 
 ### 第二步：上传文件
-使用宝塔、FileZilla 或 `scp` 命令，将以下内容上传到服务器的目录（例如 `/var/www/file-box`）：
+使用宝塔、FileZilla 或 `scp` 命令，将以下内容上传到服务器的目录（例如 `/opt/file-express`）：
 -   📁 `dist/` (整个文件夹)
 -   📄 `package.json`
 -   📄 `.env` (如果没有就新建一个，见下方配置)
 
 ### 第三步：服务器安装依赖
-1. 在服务器上，进入对应的目录：`cd /var/www/file-box`
+1. 在服务器上，进入对应的目录：`cd /opt/file-express`
 2. 安装生产环境依赖：`npm install --omit=dev`
 
 ### 第四步：启动应用
@@ -93,18 +93,19 @@ docker --version
 docker compose version
 ```
 
-### 第二步：上传核心部署文件
-在服务器上新建一个目录（如 `/var/www/file-box-docker`），只需要上传以下一个核心配置运行文件：
+### 第二步：一键创建标准工作目录并上传配置文件
+在服务器上新建工业标准应用部署目录（`/opt/file-express`），只需要在此目录下准备和上传核心配置文件：
 -   📄 `docker-compose.yml`
 
-⚠️ **特别提示**：由于 Docker 挂载非已有文件的特性，建议在服务器对应目录下，提前建立空白数据目录和数据库文件，避免 Docker 错将其识别并挂载为新文件夹导致不可写报错：
+⚠️ **特别提示**：由于 Docker 挂载非已有文件的特性，建议先创建标准主目录并提前建立空白数据目录和数据库文件，避免 Docker 错将其识别并挂载为新文件夹导致不可写报错：
 ```bash
+mkdir -p /opt/file-express && cd /opt/file-express
 mkdir -p local_storage
 touch local_db.json
 ```
 
 ### 第三步：一键运行容器
-在包含 `docker-compose.yml` 的目录下执行：
+在包含 `docker-compose.yml` 的标准目录（如 `/opt/file-express`）下执行：
 ```bash
 docker compose up -d
 ```

@@ -37,6 +37,18 @@
   - 📋 **选项 E：查看主容器运行日志** (`docker compose logs -f`)。
 - [x] **经典/容器双模并存**：完美向下兼容原有 Node 挂载模式，提供无缝体验切换。
 
+### 5. 标准化应用部署/安装到 `/opt/file-express` [已完成]
+- [x] **优化 `docker-compose.yml` 极简通用架构**：
+  - 维持 `docker-compose.yml` 中主机端持久卷挂载为相对路径（如 `./local_storage` 与 `./local_db.json`）。
+  - 这允许极佳的随处即开即用（Mac、Windows、Linux），并约定将服务器上的生产工作根目录全部统一定位在 `/opt/file-express` 文件夹下。在 `/opt/file-express` 下启动时，它们将完美物理对应到 `/opt/file-express/local_storage` 和 `/opt/file-express/local_db.json`。
+- [x] **精调 `deployment.md` 用户说明书**：
+  - 将“模式 C：Docker 极速部署”中的所有路径示例（包括原先临时写的 `/var/www/...` 等）统一变更为标准路径 `/opt/file-express`。
+  - 详细指导如何以 root 权限进行一键配置：`mkdir -p /opt/file-express`、上传配置以及执行容器拉起。
+- [x] **重整 `fe.sh` 的 Docker 环境引导逻辑**：
+  - 当用户在 `fe.sh` 面板中一键启动 Docker 服务时，检测当前运行环境。
+  - 如果当前目录不是 `/opt/file-express`，给用户以温馨的终端控制台高亮建议：“*工业级生产部署建议将此应用文件夹或 Compose 配置文件放置在 `/opt/file-express` 路径下执行，以符合 Linux 标准文件层级规范 (FHS)*”。
+  - 同时，在启动容器前自动在当前根目录通过 `mkdir -p local_storage` 和 `touch local_db.json` 并给予安全权限，确保不会出现文件夹误挂载报错。
+
 ---
 
 ## 🔎 本次方案分析

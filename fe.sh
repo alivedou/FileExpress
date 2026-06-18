@@ -393,6 +393,13 @@ docker_panel() {
                 ;;
             3)
                 echo -e "${BLUE}=== 一键启动 Docker 服务 ===${NC}"
+                local current_dir=$(pwd)
+                if [ "$current_dir" != "/opt/file-express" ]; then
+                    echo -e "${YELLOW}⚠️  【生产环境专业提示】"
+                    echo -e "    当前运行路径为: $current_dir"
+                    echo -e "    工业级生产部署强烈建议将此应用文件夹或 Compose 配置文件统一存放于 /opt/file-express 目录下执行，"
+                    echo -e "    这符合 Linux 标准文件层级规范 (FHS)，并防范不慎误删宿主机保活数据。${NC}\n"
+                fi
                 mkdir -p local_storage
                 if [ ! -f "local_db.json" ]; then
                     echo '{"files": {}}' > local_db.json
@@ -424,6 +431,13 @@ docker_panel() {
                 ;;
             5)
                 echo -e "${BLUE}=== 本地重构打包并升级 Docker 容器 ===${NC}"
+                local current_dir=$(pwd)
+                if [ "$current_dir" != "/opt/file-express" ]; then
+                    echo -e "${YELLOW}⚠️  【生产环境专业提示】"
+                    echo -e "    当前运行路径为: $current_dir"
+                    echo -e "    工业级生产部署强烈建议将此应用文件夹或 Compose 配置文件统一存放于 /opt/file-express 目录下执行，"
+                    echo -e "    这符合 Linux 标准文件层级规范 (FHS)，并防范不慎误删宿主机保活数据。${NC}\n"
+                fi
                 mkdir -p local_storage
                 if [ ! -f "local_db.json" ]; then
                     echo '{"files": {}}' > local_db.json
