@@ -74,7 +74,48 @@
 
 ---
 
-## 🌐 第三步：Nginx 配置 (让访问更优雅)
+## 🐳 模式 C：Docker 极速部署 (极其推荐：隔离、持久、安全)
+
+**原理**：借助准备好的 Dockerfiles，在服务器上生成独立干净的系统环境。利用数据卷卷挂载，防止容器重建时文件丢失。
+
+### 第一步：在阿里云服务器安装 Docker 与 Compose
+如果你服务器上还没安装 Docker，直接运行以下命令：
+```bash
+# 1. 极速安装 Docker
+curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun
+
+# 2. 启动并设置开机自启
+systemctl start docker
+systemctl enable docker
+
+# 3. 检查安装状态
+docker --version
+docker compose version
+```
+
+### 第二步：上传核心部署文件
+在服务器上新建一个目录（如 `/var/www/file-box-docker`），只需要上传以下一个核心配置运行文件：
+-   📄 `docker-compose.yml`
+
+⚠️ **特别提示**：由于 Docker 挂载非已有文件的特性，建议在服务器对应目录下，提前建立空白数据目录和数据库文件，避免 Docker 错将其识别并挂载为新文件夹导致不可写报错：
+```bash
+mkdir -p local_storage
+touch local_db.json
+```
+
+### 第三步：一键运行容器
+在包含 `docker-compose.yml` 的目录下执行：
+```bash
+docker compose up -d
+```
+> **小贴士**：如果是第一次运行，或想拉取最新本地代码在服务器上完全重新打包：
+> - 直接在包含 `Dockerfile` 和当前项目的根目录下运行：`docker compose up -d --build`。
+> - 容器启动后，即可通过访问 `http://服务器IP:3456` 畅玩运行！
+> - 若需要修改映射端口（默认 3456），进入 `docker-compose.yml`，修改 `ports:` 下的 `- "3456:3000"`，比如 `- "80:3000"` 就可以直接通过 80 端口无需反向代理访问。
+
+---
+
+## 🌐 第四步：Nginx 配置 (让访问更优雅)
 
 为了能通过域名或 80 端口直接访问，且支持大文件，请修改 Nginx 配置（通常在 `/etc/nginx/nginx.conf` 或 `/etc/nginx/conf.d/default.conf`）：
 

@@ -311,6 +311,152 @@ advanced_options() {
     done
 }
 
+# Docker 部署管理子面板
+docker_panel() {
+    while true; do
+        clear
+        echo -e "${BLUE}========================================"
+        echo -e "       Docker 极速部署运维面板          "
+        echo -e "=======================================${NC}"
+        echo -e "1. ⚙️ 检测与安装 Docker 环境 (自愈引擎)"
+        echo -e "2. ⚡ 一键拉取 GHCR 线上已发布镜像  (由 Actions 生成)"
+        echo -e "3. 🚀 一键启动 Docker Compose 容器 (后台静默)"
+        echo -e "4. ⏹️ 一键关闭并清理 Docker 运行环境"
+        echo -e "5. 🔄 强力重新构建并启动本地容器   (实时打包)"
+        echo -e "6. 📋 查看容器状态及实时服务日志   (Ctrl+C 退出)"
+        echo -e "----------------------------------------"
+        echo -e "q. 返回主菜单"
+        echo -e "----------------------------------------"
+        
+        read -p "请选择 (1-6, q): " docker_choice
+        case $docker_choice in
+            1)
+                echo -e "${BLUE}=== 正在检测 Docker 引擎安装状态 ===${NC}"
+                if ! command -v docker &> /dev/null; then
+                    echo -e "${YELLOW}未检测到 Docker，正在尝试自动安装 Docker 引擎...${NC}"
+                    if curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun; then
+                        systemctl start docker
+                        systemctl enable docker
+                        echo -e "${GREEN}✓ Docker 引擎安装配置成功！${NC}"
+                    else
+                        echo -e "${RED}❌ 一键安装 Docker 失败，请参考 deployment.md 手动安装！${NC}"
+                    fi
+                else
+                    echo -e "${GREEN}✓ Docker 引擎已经就绪: $(docker --version)${NC}"
+                fi
+
+                if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
+                    echo -e "${YELLOW}检测到未安装 Docker Compose，正在尝试自动安装...${NC}"
+                    sudo curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                    sudo chmod +x /usr/local/bin/docker-compose
+                    sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+                    echo -e "${GREEN}✓ Docker Compose 安装成功：$(docker-compose --version)${NC}"
+                else
+                    echo -e "${GREEN}✓ Docker Compose 已经就绪${NC}"
+                fi
+                read -p "按回车键继续..." dummy
+                ;;
+            2)
+                echo -e "${BLUE}=== 一键拉取 GHCR 镜像 ===${NC}"
+                local default_owner="adou1235789"
+                local default_repo="file-express"
+                if [ -d ".git" ] && command -v git &> /dev/null; then
+                    local remote_url=$(git config --get remote.origin.url)
+                    if [[ $remote_url =~ github.com[:/]([^/]+)/([^.]+)(\.git)? ]]; then
+                        default_owner="${BASH_REMATCH[1]}"
+                        default_repo="${BASH_REMATCH[2]}"
+                    fi
+                fi
+                default_owner=$(echo "$default_owner" | tr '[:upper:]' '[:lower:]')
+                default_repo=$(echo "$default_repo" | tr '[:upper:]' '[:lower:]')
+
+                read -p "请输入宿主用户名/组织名 [默认: $default_owner]: " gh_owner
+                [ -z "$gh_owner" ] && gh_owner=$default_owner
+                read -p "请输入镜像仓库名 [默认: $default_repo]: " gh_repo
+                [ -z "$gh_repo" ] && gh_repo=$default_repo
+                read -p "请输入镜像标签Tag [默认: latest]: " gh_tag
+                [ -z "$gh_tag" ] && gh_tag="latest"
+
+                local image_path="ghcr.io/${gh_owner}/${gh_repo}:${gh_tag}"
+                echo -e "${YELLOW}开始执行命令: docker pull $image_path${NC}"
+                docker pull "$image_path"
+                if [ $? -eq 0 ]; then
+                    echo -e "${GREEN}✓ 镜像 $image_path 拉取成功！${NC}"
+                    if [ -f "docker-compose.yml" ]; then
+                        sed -i "s|image:.*|image: $image_path|" "docker-compose.yml"
+                        echo -e "${GREEN}✓ 已经拉取回来的新镜像同步修改到了 docker-compose.yml！${NC}"
+                    fi
+                else
+                    echo -e "${RED}❌ 镜像拉取失败。请确认 Actions 手动编译已经成功发布！${NC}"
+                fi
+                read -p "按回车键继续..." dummy
+                ;;
+            3)
+                echo -e "${BLUE}=== 一键启动 Docker 服务 ===${NC}"
+                mkdir -p local_storage
+                if [ ! -f "local_db.json" ]; then
+                    echo '{"files": {}}' > local_db.json
+                fi
+                chmod 777 local_storage local_db.json 2>/dev/null || true
+
+                if docker compose version &> /dev/null; then
+                    echo -e "${YELLOW}正在启动 Docker 容器...${NC}"
+                    docker compose up -d
+                elif command -v docker-compose &> /dev/null; then
+                    echo -e "${YELLOW}正在启动 Docker 容器...${NC}"
+                    docker-compose up -d
+                else
+                    echo -e "${RED}❌ 未检测到 docker compose 命令行工具，请先执行选择 1 安装。${NC}"
+                fi
+                sleep 2
+                read -p "按回车键继续..." dummy
+                ;;
+            4)
+                echo -e "${BLUE}=== 一键关闭并清理 Docker ===${NC}"
+                if docker compose version &> /dev/null; then
+                    docker compose down
+                elif command -v docker-compose &> /dev/null; then
+                    docker-compose down
+                else
+                    echo -e "${RED}❌ 未检测到 docker compose 命令行工具。${NC}"
+                fi
+                sleep 1.5
+                ;;
+            5)
+                echo -e "${BLUE}=== 本地重构打包并升级 Docker 容器 ===${NC}"
+                mkdir -p local_storage
+                if [ ! -f "local_db.json" ]; then
+                    echo '{"files": {}}' > local_db.json
+                fi
+                chmod 777 local_storage local_db.json 2>/dev/null || true
+
+                if docker compose version &> /dev/null; then
+                    docker compose up -d --build
+                elif command -v docker-compose &> /dev/null; then
+                    docker-compose up -d --build
+                else
+                    echo -e "${RED}❌ docker compose 不可用，请先修复环境。${NC}"
+                fi
+                sleep 2
+                read -p "按回车键继续..." dummy
+                ;;
+            6)
+                echo -e "${BLUE}=== 查看容器运行日志 ===${NC}"
+                if docker compose version &> /dev/null; then
+                    docker compose logs -f
+                elif command -v docker-compose &> /dev/null; then
+                    docker-compose logs -f
+                else
+                    echo -e "${YELLOW}未检测到 compose。尝试原生命令查看：${NC}"
+                    docker logs -f file-express-app
+                fi
+                ;;
+            q) break ;;
+            *) echo -e "${RED}无效选择${NC}" ; sleep 1 ;;
+        esac
+    done
+}
+
 # 主循环
 while true; do
     clear
@@ -323,9 +469,10 @@ while true; do
     echo -e "4. ${GREEN}后台稳定运行${NC} (系统静默挂载)"
     echo -e "5. ${RED}停止后台运行${NC} (终结挂载进程)"
     echo -e "6. ${BLUE}高级选项${NC} (全局命令/全量卸载)"
-    echo -e "7. 退出菜单"
+    echo -e "7. 🐳 ${GREEN}Docker 部署面板${NC} (极其推荐一键容器运维)"
+    echo -e "8. 退出菜单"
     echo -e "----------------------------------------"
-    read -p "请选择 (1-7): " main_choice
+    read -p "请选择 (1-8): " main_choice
 
     case $main_choice in
         1) project_config ;;
@@ -334,7 +481,8 @@ while true; do
         4) run_app true ;;
         5) stop_app_bg ;;
         6) advanced_options ;;
-        7) echo "再见！" ; exit 0 ;;
-        *) echo -e "${RED}无效选择 (1-7)${NC}" ; sleep 1 ;;
+        7) docker_panel ;;
+        8) echo "再见！" ; exit 0 ;;
+        *) echo -e "${RED}无效选择 (1-8)${NC}" ; sleep 1 ;;
     esac
 done
