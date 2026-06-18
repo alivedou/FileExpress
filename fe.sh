@@ -358,8 +358,8 @@ docker_panel() {
                 ;;
             2)
                 echo -e "${BLUE}=== 一键拉取 GHCR 镜像 ===${NC}"
-                local default_owner="adou1235789"
-                local default_repo="file-express"
+                local default_owner="alivedou"
+                local default_repo="FileExpress"
                 if [ -d ".git" ] && command -v git &> /dev/null; then
                     local remote_url=$(git config --get remote.origin.url)
                     if [[ $remote_url =~ github.com[:/]([^/]+)/([^.]+)(\.git)? ]]; then
