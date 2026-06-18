@@ -1,7 +1,7 @@
 # ==========================================
 # 阶段 1: 构建阶段 (Build Stage)
 # ==========================================
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN npm run build
 # ==========================================
 # 阶段 2: 运行阶段 (Run Stage)
 # ==========================================
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 

@@ -116,7 +116,7 @@ project_config() {
         
         echo -e "4. 单附件大小上限 : ${GREEN}${MAX_SINGLE_FILE_SIZE_MB:-10} MB${NC}"
         echo -e "5. ZIP 包体积上限 : ${GREEN}${MAX_ZIP_PAYLOAD_SIZE_MB:-50} MB${NC}"
-        echo -e "6. 自定义映射端口 : ${GREEN}${APP_PORT:-3456}${NC} (宿主机直接访问端口)"
+        echo -e "6. 自定义映射端口 : ${GREEN}${APP_PORT:-3000}${NC} (宿主机直接访问端口)"
         echo -e "7. 文件长效保存期 : ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
         echo -e "8. 文件提取上限频 : ${GREEN}${MAX_DOWNLOADS:-100} 次${NC}"
         echo -e "9. 核心加解密密钥 : ${YELLOW}${STORAGE_ENCRYPTION_KEY:-"未安全预装"}${NC}"
@@ -154,7 +154,7 @@ project_config() {
                 [ -n "$input_val" ] && save_env_var "MAX_ZIP_PAYLOAD_SIZE_MB" "$input_val"
                 ;;
             6)
-                read -p "请输入宿主机映射暴露端口 (推荐 3456 或 80): " input_val
+                read -p "请输入宿主机映射暴露端口 (推荐 3000 或 80): " input_val
                 [ -n "$input_val" ] && save_env_var "APP_PORT" "$input_val"
                 ;;
             7)
@@ -289,7 +289,7 @@ deploy_version() {
             $compose_cmd stop file-express-app 2>/dev/null || true
             $compose_cmd rm -f file-express-app 2>/dev/null || true
             $compose_cmd up -d
-            echo -e "\n${GREEN}★ 部署成功已在线激活上线！宿主机访问端口现设为: ${APP_PORT:-3456}${NC}"
+            echo -e "\n${GREEN}★ 部署成功已在线激活上线！宿主机访问端口现设为: ${APP_PORT:-3000}${NC}"
         else
             echo -e "${RED}❌ 远程极速镜像拉取失败。${NC}"
             echo -e "可能原因为：1. GitHub Containers 无法在中国大陆高可靠解析；2. 您还未执行 Actions 手动触发流。"
@@ -302,7 +302,7 @@ deploy_version() {
             echo -e "${RED}❌ 致命错误：当前目录下未感应到 Dockerfile，无法启动直打，过程强退！${NC}"
         else
             $compose_cmd up -d --build
-            echo -e "\n${GREEN}★ 本地编译及冷启动成功！宿主物理监控端口设定为: ${APP_PORT:-3456}${NC}"
+            echo -e "\n${GREEN}★ 本地编译及冷启动成功！宿主物理监控端口设定为: ${APP_PORT:-3000}${NC}"
         fi
     fi
     read -p "按 [Enter] 键一键返回控制台主菜单..." dummy
@@ -330,7 +330,7 @@ check_status() {
     local local_ip=$(hostname -I | awk '{print $1}')
     [ -z "$local_ip" ] && local_ip="127.0.0.1"
     load_env
-    local port=${APP_PORT:-3456}
+    local port=${APP_PORT:-3000}
 
     echo -e "应用内网/虚拟机映射地址  : ${GREEN}http://${local_ip}:${port}${NC}"
     if command -v curl &>/dev/null; then
