@@ -2,7 +2,16 @@
 
 A minimalist, secure, and ephemeral file transfer hub.
 
-## Quick Start
+## Quick Start 🚀
+
+### ⚡ One-Click Cloud Deployment (Highly Recommended)
+For a premium, instant VPS or Linux workstation installation, just copy and execute this single command:
+```bash
+bash <(curl -sSfL https://raw.githubusercontent.com/alivedou/FileExpress/main/fe.sh)
+```
+This script will guide you to configure environment, manage and run the application daemon cleanly!
+
+### 🛠️ Manual Installation from Source
 
 **1. Install Node.js (Version 22 LTS or 24 Current Recommended)**
 
