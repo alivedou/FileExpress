@@ -64,7 +64,7 @@ generate_default_env() {
 # Docker 容器底层原生装载之系统配置项文件 (.env)
 # =========================================================================
 NODE_ENV=production
-APP_PORT=3456
+APP_PORT=3000
 APP_NAME=File Express
 APP_SUBTITLE=极简、安全、临时的文件传输中心
 MAX_SINGLE_FILE_SIZE_MB=10
@@ -75,7 +75,7 @@ JWT_SECRET=$rand_jwt
 MAX_STORAGE_HOURS=24
 MAX_DOWNLOADS=100
 EOF
-        echo -e "${GREEN}✓ .env 新配置文件生成成功！服务端口缺省值 ${YELLOW}3456${GREEN}，加解密密钥均自动完成高安全度动态随机设定。${NC}"
+        echo -e "${GREEN}✓ .env 新配置文件生成成功！服务端口缺省值 ${YELLOW}3000${GREEN}，加解密密钥均自动完成高安全度动态随机设定。${NC}"
         sleep 1
     fi
 }
