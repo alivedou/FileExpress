@@ -1,0 +1,29 @@
+# Docker 构建排除规则 (.dockerignore)
+
+# 依赖和构建输出目录
+node_modules
+dist
+.npm
+build
+
+# 系统和编辑器配置
+.git
+.github
+.vscode
+.idea
+*.log
+.DS_Store
+Thumbs.db
+
+# 本地运行缓存及上传物理文件 (防止直接打包进镜像中)
+local_storage
+local_db.json
+.env
+
+# 部署手册及说明文档 (运行时不需要)
+fe.sh
+upload.bat.example
+PRD.md
+list.md
+deployment.md
+README.md
