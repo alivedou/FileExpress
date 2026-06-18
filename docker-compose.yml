@@ -7,18 +7,20 @@ services:
     container_name: file-express-app
     restart: always
     ports:
-      # 映射到宿主机的 3456 端口，如果需要更换端口，修改左侧的 3456 即可
-      - "3456:3000"
+      # 映射到宿主机的 APP_PORT 端口，默认为 3456
+      - "${APP_PORT:-3456}:3000"
     environment:
       - NODE_ENV=production
       - APP_PORT=3000
-      - APP_NAME=File Express
-      - APP_SUBTITLE=极简、安全、临时的文件传输中心
-      - MAX_SINGLE_FILE_SIZE_MB=10
-      - MAX_ZIP_PAYLOAD_SIZE_MB=50
-      - MAX_TOTAL_STORAGE_MB=1024
-      # 部署时，请务必修改为强随机密码字符串以保证加密数据安全性！
-      - STORAGE_ENCRYPTION_KEY=8664183d-3b8f-431f-9988-6622b72f104d
+      - APP_NAME=${APP_NAME:-File Express}
+      - APP_SUBTITLE=${APP_SUBTITLE:-极简、安全、临时的文件传输中心}
+      - MAX_SINGLE_FILE_SIZE_MB=${MAX_SINGLE_FILE_SIZE_MB:-10}
+      - MAX_ZIP_PAYLOAD_SIZE_MB=${MAX_ZIP_PAYLOAD_SIZE_MB:-50}
+      - MAX_TOTAL_STORAGE_MB=${MAX_TOTAL_STORAGE_MB:-1024}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-8664183d-3b8f-431f-9988-6622b72f104d}
+      - JWT_SECRET=${JWT_SECRET:-fileexpresssecret}
+      - MAX_STORAGE_HOURS=${MAX_STORAGE_HOURS:-24}
+      - MAX_DOWNLOADS=${MAX_DOWNLOADS:-100}
     volumes:
       # 挂载数据卷实现持久化存储。重新构建容器、更新镜像时，数据和元数据库不会丢失
       # 1. 物理上传的文件本地卷挂载

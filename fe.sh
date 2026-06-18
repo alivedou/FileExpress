@@ -1,502 +1,482 @@
 #!/bin/bash
 
-# 文件快递柜 (File Express) 交互式管理工具
+# =========================================================================
+# 文件快递柜 (File Express) 专属 Docker 极速部署运维工具 (FE CLI)
 # 运行方式: chmod +x fe.sh && ./fe.sh
+# =========================================================================
 
-ENV_FILE=".env"
-DB_FILE="local_db.json"
-STORAGE_DIR="local_storage"
+# 强物理锁定：获取当前运行脚本的绝对路径作为项目根目录，防止路径偏移漂移
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
+DB_FILE="$SCRIPT_DIR/local_db.json"
+STORAGE_DIR="$SCRIPT_DIR/local_storage"
 
-# 颜色定义
+# 优雅终端色彩定制
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m' # 清除颜色标志
 
-# 加载环境变量
-load_env() {
-    if [ -f "$ENV_FILE" ]; then
-        export $(grep -v '^#' $ENV_FILE | xargs)
+# 1. 密钥随机自生成套件
+generate_random_secret() {
+    if command -v openssl &>/dev/null; then
+        openssl rand -hex 16
+    else
+        # 兼容无 openssl 的微型宿主机系统
+        cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1
     fi
 }
 
-# 保存环境变量
+# 2. 导入与解析 .env 环境变量
+load_env() {
+    if [ -f "$ENV_FILE" ]; then
+        # 过滤掉开头为 # 的注释，优雅利用 export 加载
+        export $(grep -v '^#' "$ENV_FILE" | xargs)
+    fi
+}
+
+# 3. 数据静默落笔至 .env 文件
 save_env_var() {
     local key=$1
     local value=$2
+    touch "$ENV_FILE"
     if grep -q "^$key=" "$ENV_FILE"; then
-        sed -i "s|^$key=.*|$key=$value|" "$ENV_FILE"
+        # 处理 Linux/Mac 平台下不同的 sed 操作语法兼容
+        if [ "$(uname)" = "Darwin" ]; then
+            sed -i "" "s|^$key=.*|$key=$value|" "$ENV_FILE"
+        else
+            sed -i "s|^$key=.*|$key=$value|" "$ENV_FILE"
+        fi
     else
         echo "$key=$value" >> "$ENV_FILE"
     fi
 }
 
-# 获取推荐值 (剩余空间的 40%)
-get_recommended_storage() {
-    # 获取当前目录所在磁盘的可利用空间 (KB)
-    local available_kb=$(df -k . | awk 'NR==2 {print $4}')
-    local available_gb=$((available_kb / 1024 / 1024))
-    # 计算 40% (直接使用 bash 整数运算)
-    local recommended=$((available_gb * 4 / 10))
-    # 至少保留 1GB
-    if [ "$recommended" -lt 1 ]; then recommended=1; fi
-    echo $recommended
-}
-
-# 获取磁盘剩余大小
-get_disk_free() {
-    df -h . | awk 'NR==2 {print $4}'
-}
-
-# 1. 项目配置菜单
-project_config() {
-    while true; do
-        load_env
-        clear
-        echo -e "${BLUE}========================================"
-        echo -e "       项目配置详情 (Config Details)     "
-        echo -e "=======================================${NC}"
-        
-        # 显示当前值
-        echo -e "1. 应用名称: ${GREEN}${APP_NAME:-"File Express (默认)"}${NC}"
-        echo -e "2. 副标题  : ${GREEN}${APP_SUBTITLE:-"极简安全的文件传输中心"}${NC}"
-        
-        # 计算当前存储配额显示
-        local current_quota_mb=${MAX_TOTAL_STORAGE_MB:-1024}
-        local current_quota_gb=$(awk "BEGIN {printf \"%.1f\", $current_quota_mb / 1024}")
-        echo -e "3. 总存储配额: ${GREEN}${current_quota_gb} GB${NC} (系统剩余: $(get_disk_free))"
-        
-        echo -e "4. 单文件上限: ${GREEN}${MAX_SINGLE_FILE_SIZE_MB:-10} MB${NC}"
-        echo -e "5. ZIP 包上限: ${GREEN}${MAX_ZIP_PAYLOAD_SIZE_MB:-50} MB${NC}"
-        echo -e "6. 加密密钥  : ${YELLOW}${STORAGE_ENCRYPTION_KEY:-"未设置"}${NC}"
-        echo -e "7. 自定义端口: ${GREEN}${APP_PORT:-3000}${NC}"
-        echo -e "8. 最大存储时长: ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
-        echo -e "9. 最大提取次数: ${GREEN}${MAX_DOWNLOADS:-100} 次${NC}"
-        echo -e "----------------------------------------"
-        echo -e "s. 保存并返回 | q. 直接返回"
-        echo -e "----------------------------------------"
-        echo -e "${YELLOW}注: 修改端口后需重启应用生效。${NC}"
-        echo -e "----------------------------------------"
-        
-        read -p "请输入要修改的项目编号: " cfg_choice
-        
-        case $cfg_choice in
-            1)
-                read -p "输入应用名称 (回车设为默认): " input_val
-                [ -z "$input_val" ] && input_val="File Express"
-                save_env_var "APP_NAME" "$input_val"
-                ;;
-            2)
-                read -p "输入副标题 (回车设为默认): " input_val
-                [ -z "$input_val" ] && input_val="极简、安全、临时的文件传输中心"
-                save_env_var "APP_SUBTITLE" "$input_val"
-                ;;
-            3)
-                local rec=$(get_recommended_storage)
-                echo -e "当前磁盘剩余约 $(get_disk_free)。"
-                read -p "输入最大占用空间 (GB) [推荐为剩余 40%: $rec GB]: " input_val
-                [ -z "$input_val" ] && input_val=$rec
-                local mb_val=$((input_val * 1024))
-                save_env_var "MAX_TOTAL_STORAGE_MB" "$mb_val"
-                ;;
-            4)
-                # 推荐值为总空间的 1/50
-                local current_max=${MAX_TOTAL_STORAGE_MB:-1024}
-                local rec_single=$((current_max / 50))
-                read -p "输入单文件体积上限 (MB) [推荐: $rec_single MB]: " input_val
-                [ -z "$input_val" ] && input_val=10
-                save_env_var "MAX_SINGLE_FILE_SIZE_MB" "$input_val"
-                ;;
-            5)
-                read -p "输入ZIP压缩包上限 (MB): " input_val
-                [ -z "$input_val" ] && input_val=50
-                save_env_var "MAX_ZIP_PAYLOAD_SIZE_MB" "$input_val"
-                ;;
-            6)
-                read -p "输入加密密钥 (32位佳): " input_val
-                [ ! -z "$input_val" ] && save_env_var "STORAGE_ENCRYPTION_KEY" "$input_val"
-                ;;
-            7)
-                read -p "输入自定义运行端口 (默认 3000): " input_val
-                [ -z "$input_val" ] && input_val=3000
-                save_env_var "APP_PORT" "$input_val"
-                ;;
-            8)
-                read -p "输入最大存储时长(小时) (默认 24): " input_val
-                [ -z "$input_val" ] && input_val=24
-                save_env_var "MAX_STORAGE_HOURS" "$input_val"
-                ;;
-            9)
-                read -p "输入最大允许的提取次数 (默认 100): " input_val
-                [ -z "$input_val" ] && input_val=100
-                save_env_var "MAX_DOWNLOADS" "$input_val"
-                ;;
-            s|q) break ;;
-            *) echo -e "${RED}无效选择${NC}" ; sleep 1 ;;
-        esac
-    done
-}
-
-# 2. 数据库与环境重置
-init_database() {
-    clear
-    echo -e "${RED}严重警告: 此操作将永久删除：${NC}"
-    echo -e "1. ${YELLOW}所有已上传的物理文件${NC} (local_storage/*)"
-    echo -e "2. ${YELLOW}所有元数据记录${NC} (local_db.json)"
-    echo -e "3. ${YELLOW}所有环境变量配置${NC} (.env - 包含加密密钥)"
-    echo -e "----------------------------------------"
-    read -p "你确定要执行完全重置吗？之前的文件将永远无法恢复！ (y/n): " confirm
-    if [ "$confirm" == "y" ]; then
-        echo -e "${BLUE}正在清理中...${NC}"
-        rm -f "$DB_FILE"
-        rm -f "$ENV_FILE"
-        rm -rf "$STORAGE_DIR"/*
-        echo -e "${GREEN}项目已完全重置。请重新运行 '项目配置' 或重新启动。${NC}"
-        sleep 3
-    else
-        echo "操作已取消。"
+# 4. 初始化默认配置模板并写入当前绝对路径下
+generate_default_env() {
+    if [ ! -f "$ENV_FILE" ]; then
+        echo -e "${YELLOW}未检测到现有环境配置，正在同级目录下自动定制专属 .env 配置文件...${NC}"
+        local rand_enc=$(generate_random_secret)
+        local rand_jwt=$(generate_random_secret)
+        cat <<EOF > "$ENV_FILE"
+# =========================================================================
+# Docker 容器底层原生装载之系统配置项文件 (.env)
+# =========================================================================
+NODE_ENV=production
+APP_PORT=3456
+APP_NAME=File Express
+APP_SUBTITLE=极简、安全、临时的文件传输中心
+MAX_SINGLE_FILE_SIZE_MB=10
+MAX_ZIP_PAYLOAD_SIZE_MB=50
+MAX_TOTAL_STORAGE_MB=1024
+STORAGE_ENCRYPTION_KEY=$rand_enc
+JWT_SECRET=$rand_jwt
+MAX_STORAGE_HOURS=24
+MAX_DOWNLOADS=100
+EOF
+        echo -e "${GREEN}✓ .env 新配置文件生成成功！服务端口缺省值 ${YELLOW}3456${GREEN}，加解密密钥均自动完成高安全度动态随机设定。${NC}"
         sleep 1
     fi
 }
 
-# 3. 运行应用
-run_app() {
-    local bg_mode=${1:-false}
-    load_env
-    clear
-    echo -e "${GREEN}>>> 正在启动文件快递柜...${NC}"
-    
-    # 尝试获取本机内网 IP
-    local local_ip=$(hostname -I | awk '{print $1}')
-    [ -z "$local_ip" ] && local_ip="127.0.0.1"
-    local port=${APP_PORT:-3000}
-    
-    # 极轻量公网 IP 自动检测（带短超时，防阻塞）
-    local public_ip=""
-    if [ -x "$(command -v curl)" ]; then
-        public_ip=$(curl -s --max-time 1.5 ifconfig.me || curl -s --max-time 1.5 ip.sb || curl -s --max-time 1.5 api.ipify.org)
-    fi
-    
-    echo -e "${BLUE}========================================"
-    echo -e "      APPLICATION STARTUP SEQUENCE      "
-    echo -e "=======================================${NC}"
-    echo -e "本地内网/虚拟机地址: ${GREEN}http://$local_ip:$port${NC}"
-    if [ ! -z "$public_ip" ]; then
-        echo -e "外部公网推荐访问地址: ${GREEN}http://$public_ip:$port${NC}"
-    fi
-    echo -e "手机扫码或浏览器输入上方适合您网络环境的地址即可使用。"
-    echo -e "----------------------------------------"
-    
-    # 自动安装依赖和构建
-    if [ ! -d "node_modules" ]; then
-        echo -e "${YELLOW}正在安装依赖 (npm install)...${NC}"
-        npm install
-    fi
-    if [ ! -d "dist" ]; then
-        echo -e "${YELLOW}正在构建应用 (npm run build)...${NC}"
-        npm run build
-    fi
-    
-    if [ "$bg_mode" = true ]; then
-        echo -e "日志输出已重定向至: ${YELLOW}app.log${NC}"
-        echo -e "${GREEN}应用已在后台稳定运行。${NC}"
-        # 关掉任何已有的 PM2 或 nohup 残留 (如果有) 的提示，这里直接 nohup
-        nohup npm start > app.log 2>&1 &
-        echo $! > app.pid
-        echo -e "（提示：可随时通过 'kill $(cat app.pid)' 或通过 FE 菜单停止服务）"
-        read -p "按回车键返回主菜单..." dummy
-    else
-        echo -e "日志输出 (Ctrl+C 暂停运行并返回菜单):"
-        # 启动 Node 应用挂载到前台
-        npm start &
-        APP_PID=$!
-        
-        # 捕获 Ctrl+C 并优雅关闭进程
-        trap "echo -e '\n${YELLOW}检测到 Ctrl+C，正在停止应用...${NC}'; kill $APP_PID 2>/dev/null; sleep 1; return" SIGINT
-
-        # 等待后台应用进程结束
-        wait $APP_PID
-        
-        # 恢复 SIGINT 行为
-        trap - SIGINT
-        
-        echo -e "\n${YELLOW}应用已停止运行。${NC}"
-        read -p "按回车键返回主菜单..." dummy
-    fi
+# 获取磁盘可用大小及 40% 剩余空间算力指导
+get_disk_free() {
+    df -h "$SCRIPT_DIR" | awk 'NR==2 {print $4}'
 }
 
-# 停止后台运行
-stop_app_bg() {
-    clear
-    echo -e "${YELLOW}检查后台进程...${NC}"
-    if [ -f "app.pid" ]; then
-        pid=$(cat app.pid)
-        if ps -p $pid > /dev/null; then
-            kill $pid
-            echo -e "${GREEN}已成功停止后台服务 (PID: $pid)${NC}"
-        else
-            echo -e "后台服务未运行或已被停止。"
-        fi
-        rm -f app.pid
-    else
-        # 尝试暴力按端口或名称杀掉
-        echo -e "未找到 app.pid 记录，应用可能未在后台运行。"
-    fi
-    sleep 1.5
+get_recommended_storage() {
+    local available_kb=$(df -k "$SCRIPT_DIR" | awk 'NR==2 {print $4}')
+    local available_gb=$((available_kb / 1024 / 1024))
+    local recommended=$((available_gb * 4 / 10))
+    if [ "$recommended" -lt 1 ]; then recommended=1; fi
+    echo $recommended
 }
 
-# 高级选项
-advanced_options() {
+# =========================================================================
+# 菜单 1：项目配置
+# =========================================================================
+project_config() {
+    # 强制预加载/预生成 .env 供用户交互直接读取
+    generate_default_env
     while true; do
+        load_env
         clear
-        echo -e "${BLUE}========================================"
-        echo -e "              高级选项                   "
-        echo -e "=======================================${NC}"
-        echo -e "1. ${GREEN}安装全局系统命令 'fe'${NC} (支持随处唤出面板)"
-        echo -e "2. ${RED}完全干净卸载整个应用${NC} (一键自毁全量清理)"
-        echo -e "----------------------------------------"
-        echo -e "q. 返回上级菜单"
-        echo -e "----------------------------------------"
-        read -p "请选择 (1-2, q): " adv_choice
-        case $adv_choice in
+        echo -e "${BLUE}====================================================="
+        echo -e "         🐳 File Express 项目中控配置细节            "
+        echo -e "=====================================================${NC}"
+        echo -e "配置文件地址: ${YELLOW}$ENV_FILE${NC}"
+        echo -e "-----------------------------------------------------"
+        echo -e "1. 应用展示名称  : ${GREEN}${APP_NAME:-"File Express"}${NC}"
+        echo -e "2. 页面副标题设定 : ${GREEN}${APP_SUBTITLE:-"极简、安全、临时的文件传输中心"}${NC}"
+        
+        local current_quota_mb=${MAX_TOTAL_STORAGE_MB:-1024}
+        local current_quota_gb=$(awk "BEGIN {printf \"%.1f\", $current_quota_mb / 1024}")
+        echo -e "3. 总存储空间配额 : ${GREEN}${current_quota_gb} GB${NC} (系统剩余: $(get_disk_free))"
+        
+        echo -e "4. 单附件大小上限 : ${GREEN}${MAX_SINGLE_FILE_SIZE_MB:-10} MB${NC}"
+        echo -e "5. ZIP 包体积上限 : ${GREEN}${MAX_ZIP_PAYLOAD_SIZE_MB:-50} MB${NC}"
+        echo -e "6. 自定义映射端口 : ${GREEN}${APP_PORT:-3456}${NC} (宿主机直接访问端口)"
+        echo -e "7. 文件长效保存期 : ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
+        echo -e "8. 文件提取上限频 : ${GREEN}${MAX_DOWNLOADS:-100} 次${NC}"
+        echo -e "9. 核心加解密密钥 : ${YELLOW}${STORAGE_ENCRYPTION_KEY:-"未安全预装"}${NC}"
+        echo -e "10. JWT 授权金钥  : ${YELLOW}${JWT_SECRET:-"使用默认"}${NC}"
+        echo -e "-----------------------------------------------------"
+        echo -e "s. 一键确定生效并返回 | q. 放弃修改不保存返回"
+        echo -e "-----------------------------------------------------"
+        echo -e "${YELLOW}提示: 此配置直接写入本地绝对路径环境变量以防丢失，并在下次启动或重启时彻底生效。${NC}"
+        echo -e "-----------------------------------------------------"
+        
+        read -p "请输入欲修改的配置项编号 (1-10, s/q): " cfg_choice
+        case $cfg_choice in
             1)
-                echo -e "${YELLOW}正在尝试安装全局命令...${NC}"
-                # 尝试使用 sudo 安装到 /usr/local/bin
-                sudo -n ln -sf "$(pwd)/fe.sh" /usr/local/bin/fe 2>/dev/null || ln -sf "$(pwd)/fe.sh" /usr/local/bin/fe 2>/dev/null
-                if [ $? -eq 0 ]; then
-                    echo -e "${GREEN}安装成功！已安装至 /usr/local/bin/fe${NC}"
-                    echo -e "${GREEN}以后在系统任何位置输入 'fe' 即可呼出本管理面板。${NC}"
-                else
-                    echo -e "${YELLOW}无法写入 /usr/local/bin，尝试安装至当前用户目录...${NC}"
-                    mkdir -p "$HOME/.local/bin"
-                    ln -sf "$(pwd)/fe.sh" "$HOME/.local/bin/fe"
-                    if [ $? -eq 0 ]; then
-                        echo -e "${GREEN}命令已链接至 $HOME/.local/bin/fe${NC}"
-                        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-                            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-                            echo -e "${YELLOW}请执行命令：source ~/.bashrc 以激活路径变量，然后再输入 'fe'！${NC}"
-                        else
-                            echo -e "${GREEN}以后在系统任何位置输入 'fe' 即可呼出本管理面板。${NC}"
-                        fi
-                    else
-                        echo -e "${RED}安装失败... 请手动使用别名或直接运行 ./fe.sh${NC}"
-                    fi
-                fi
-                read -p "按回车键继续..." dummy
+                read -p "请输入应用前台大标题: " input_val
+                [ -n "$input_val" ] && save_env_var "APP_NAME" "$input_val"
                 ;;
             2)
-                echo -e "${RED}【极端警告】此操作将：${NC}"
-                echo -e "1. 强制停止所有后台传输服务"
-                echo -e "2. 永久删除所有数据库和文件缓存"
-                echo -e "3. 删除系统级快捷命令"
-                echo -e "4. 删除整个项目目录！此操作完全不可逆！"
-                read -p "类型 'CONFIRM' 确认执行自我销毁: " confirm
-                if [ "$confirm" == "CONFIRM" ]; then
-                    echo -e "${YELLOW}正在中止相关进程...${NC}"
-                    if [ -f "app.pid" ]; then
-                        kill $(cat app.pid) 2>/dev/null
-                    fi
-                    sudo rm -f /usr/local/bin/fe
-                    echo -e "${YELLOW}调度自毁任务中... 再见！${NC}"
-                    local app_path=$(pwd)
-                    cd ..
-                    rm -rf "$app_path"
-                    exit 0
-                fi
-                ;;
-            q) break ;;
-            *) echo -e "${RED}无效选择${NC}" ; sleep 1 ;;
-        esac
-    done
-}
-
-# Docker 部署管理子面板
-docker_panel() {
-    while true; do
-        clear
-        echo -e "${BLUE}========================================"
-        echo -e "       Docker 极速部署运维面板          "
-        echo -e "=======================================${NC}"
-        echo -e "1. ⚙️ 检测与安装 Docker 环境 (自愈引擎)"
-        echo -e "2. ⚡ 一键拉取 GHCR 线上已发布镜像  (由 Actions 生成)"
-        echo -e "3. 🚀 一键启动 Docker Compose 容器 (后台静默)"
-        echo -e "4. ⏹️ 一键关闭并清理 Docker 运行环境"
-        echo -e "5. 🔄 强力重新构建并启动本地容器   (实时打包)"
-        echo -e "6. 📋 查看容器状态及实时服务日志   (Ctrl+C 退出)"
-        echo -e "----------------------------------------"
-        echo -e "q. 返回主菜单"
-        echo -e "----------------------------------------"
-        
-        read -p "请选择 (1-6, q): " docker_choice
-        case $docker_choice in
-            1)
-                echo -e "${BLUE}=== 正在检测 Docker 引擎安装状态 ===${NC}"
-                if ! command -v docker &> /dev/null; then
-                    echo -e "${YELLOW}未检测到 Docker，正在尝试自动安装 Docker 引擎...${NC}"
-                    if curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun; then
-                        systemctl start docker
-                        systemctl enable docker
-                        echo -e "${GREEN}✓ Docker 引擎安装配置成功！${NC}"
-                    else
-                        echo -e "${RED}❌ 一键安装 Docker 失败，请参考 deployment.md 手动安装！${NC}"
-                    fi
-                else
-                    echo -e "${GREEN}✓ Docker 引擎已经就绪: $(docker --version)${NC}"
-                fi
-
-                if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
-                    echo -e "${YELLOW}检测到未安装 Docker Compose，正在尝试自动安装...${NC}"
-                    sudo curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-                    sudo chmod +x /usr/local/bin/docker-compose
-                    sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
-                    echo -e "${GREEN}✓ Docker Compose 安装成功：$(docker-compose --version)${NC}"
-                else
-                    echo -e "${GREEN}✓ Docker Compose 已经就绪${NC}"
-                fi
-                read -p "按回车键继续..." dummy
-                ;;
-            2)
-                echo -e "${BLUE}=== 一键拉取 GHCR 镜像 ===${NC}"
-                local default_owner="alivedou"
-                local default_repo="FileExpress"
-                if [ -d ".git" ] && command -v git &> /dev/null; then
-                    local remote_url=$(git config --get remote.origin.url)
-                    if [[ $remote_url =~ github.com[:/]([^/]+)/([^.]+)(\.git)? ]]; then
-                        default_owner="${BASH_REMATCH[1]}"
-                        default_repo="${BASH_REMATCH[2]}"
-                    fi
-                fi
-                default_owner=$(echo "$default_owner" | tr '[:upper:]' '[:lower:]')
-                default_repo=$(echo "$default_repo" | tr '[:upper:]' '[:lower:]')
-
-                read -p "请输入宿主用户名/组织名 [默认: $default_owner]: " gh_owner
-                [ -z "$gh_owner" ] && gh_owner=$default_owner
-                read -p "请输入镜像仓库名 [默认: $default_repo]: " gh_repo
-                [ -z "$gh_repo" ] && gh_repo=$default_repo
-                read -p "请输入镜像标签Tag [默认: latest]: " gh_tag
-                [ -z "$gh_tag" ] && gh_tag="latest"
-
-                local image_path="ghcr.io/${gh_owner}/${gh_repo}:${gh_tag}"
-                echo -e "${YELLOW}开始执行命令: docker pull $image_path${NC}"
-                docker pull "$image_path"
-                if [ $? -eq 0 ]; then
-                    echo -e "${GREEN}✓ 镜像 $image_path 拉取成功！${NC}"
-                    if [ -f "docker-compose.yml" ]; then
-                        sed -i "s|image:.*|image: $image_path|" "docker-compose.yml"
-                        echo -e "${GREEN}✓ 已经拉取回来的新镜像同步修改到了 docker-compose.yml！${NC}"
-                    fi
-                else
-                    echo -e "${RED}❌ 镜像拉取失败。请确认 Actions 手动编译已经成功发布！${NC}"
-                fi
-                read -p "按回车键继续..." dummy
+                read -p "请输入前台说明副标题: " input_val
+                [ -n "$input_val" ] && save_env_var "APP_SUBTITLE" "$input_val"
                 ;;
             3)
-                echo -e "${BLUE}=== 一键启动 Docker 服务 ===${NC}"
-                local current_dir=$(pwd)
-                if [ "$current_dir" != "/opt/file-express" ]; then
-                    echo -e "${YELLOW}⚠️  【生产环境专业提示】"
-                    echo -e "    当前运行路径为: $current_dir"
-                    echo -e "    工业级生产部署强烈建议将此应用文件夹或 Compose 配置文件统一存放于 /opt/file-express 目录下执行，"
-                    echo -e "    这符合 Linux 标准文件层级规范 (FHS)，并防范不慎误删宿主机保活数据。${NC}\n"
-                fi
-                mkdir -p local_storage
-                if [ ! -f "local_db.json" ]; then
-                    echo '{"files": {}}' > local_db.json
-                fi
-                chmod 777 local_storage local_db.json 2>/dev/null || true
-
-                if docker compose version &> /dev/null; then
-                    echo -e "${YELLOW}正在启动 Docker 容器...${NC}"
-                    docker compose up -d
-                elif command -v docker-compose &> /dev/null; then
-                    echo -e "${YELLOW}正在启动 Docker 容器...${NC}"
-                    docker-compose up -d
-                else
-                    echo -e "${RED}❌ 未检测到 docker compose 命令行工具，请先执行选择 1 安装。${NC}"
-                fi
-                sleep 2
-                read -p "按回车键继续..." dummy
+                local rec_gb=$(get_recommended_storage)
+                echo -e "当前路径磁盘空间可利用约 $(get_disk_free)。"
+                read -p "请输入总限额数值 (单位: GB) [推荐配置为系统空闲之 40%: $rec_gb GB]: " input_val
+                [ -z "$input_val" ] && input_val=$rec_gb
+                local mb_val=$((input_val * 1024))
+                save_env_var "MAX_TOTAL_STORAGE_MB" "$mb_val"
                 ;;
             4)
-                echo -e "${BLUE}=== 一键关闭并清理 Docker ===${NC}"
-                if docker compose version &> /dev/null; then
-                    docker compose down
-                elif command -v docker-compose &> /dev/null; then
-                    docker-compose down
-                else
-                    echo -e "${RED}❌ 未检测到 docker compose 命令行工具。${NC}"
-                fi
-                sleep 1.5
+                read -p "请输入单个上传附件大小限额 (单位: MB, 推荐 10): " input_val
+                [ -n "$input_val" ] && save_env_var "MAX_SINGLE_FILE_SIZE_MB" "$input_val"
                 ;;
             5)
-                echo -e "${BLUE}=== 本地重构打包并升级 Docker 容器 ===${NC}"
-                local current_dir=$(pwd)
-                if [ "$current_dir" != "/opt/file-express" ]; then
-                    echo -e "${YELLOW}⚠️  【生产环境专业提示】"
-                    echo -e "    当前运行路径为: $current_dir"
-                    echo -e "    工业级生产部署强烈建议将此应用文件夹或 Compose 配置文件统一存放于 /opt/file-express 目录下执行，"
-                    echo -e "    这符合 Linux 标准文件层级规范 (FHS)，并防范不慎误删宿主机保活数据。${NC}\n"
-                fi
-                mkdir -p local_storage
-                if [ ! -f "local_db.json" ]; then
-                    echo '{"files": {}}' > local_db.json
-                fi
-                chmod 777 local_storage local_db.json 2>/dev/null || true
-
-                if docker compose version &> /dev/null; then
-                    docker compose up -d --build
-                elif command -v docker-compose &> /dev/null; then
-                    docker-compose up -d --build
-                else
-                    echo -e "${RED}❌ docker compose 不可用，请先修复环境。${NC}"
-                fi
-                sleep 2
-                read -p "按回车键继续..." dummy
+                read -p "请输入整包 ZIP 大小限额 (单位: MB, 推荐 50): " input_val
+                [ -n "$input_val" ] && save_env_var "MAX_ZIP_PAYLOAD_SIZE_MB" "$input_val"
                 ;;
             6)
-                echo -e "${BLUE}=== 查看容器运行日志 ===${NC}"
-                if docker compose version &> /dev/null; then
-                    docker compose logs -f
-                elif command -v docker-compose &> /dev/null; then
-                    docker-compose logs -f
-                else
-                    echo -e "${YELLOW}未检测到 compose。尝试原生命令查看：${NC}"
-                    docker logs -f file-express-app
-                fi
+                read -p "请输入宿主机映射暴露端口 (推荐 3456 或 80): " input_val
+                [ -n "$input_val" ] && save_env_var "APP_PORT" "$input_val"
                 ;;
-            q) break ;;
-            *) echo -e "${RED}无效选择${NC}" ; sleep 1 ;;
+            7)
+                read -p "请输入文件默认销毁时长 (单位: 小时, 默认 24): " input_val
+                [ -n "$input_val" ] && save_env_var "MAX_STORAGE_HOURS" "$input_val"
+                ;;
+            8)
+                read -p "请输入单个提取码最大提取失效上限 (默认 100): " input_val
+                [ -n "$input_val" ] && save_env_var "MAX_DOWNLOADS" "$input_val"
+                ;;
+            9)
+                read -p "请输入强加解密数据密钥 (推荐 32 位强随机): " input_val
+                [ -n "$input_val" ] && save_env_var "STORAGE_ENCRYPTION_KEY" "$input_val"
+                ;;
+            10)
+                read -p "请输入 JWT 签名鉴权保护密钥: " input_val
+                [ -n "$input_val" ] && save_env_var "JWT_SECRET" "$input_val"
+                ;;
+            s|q) break ;;
+            *) echo -e "${RED}❌ 无效编号，请重新输入 1 至 10 之间的服务编号。${NC}" ; sleep 1.5 ;;
         esac
     done
 }
 
-# 主循环
+# =========================================================================
+# 帮助工具：检测并一键自愈安装 Docker 与 Docker Compose 运行宿主环境
+# =========================================================================
+ensure_docker_env() {
+    if ! command -v docker &>/dev/null; then
+        echo -e "${YELLOW}发现当前系统中未部署 Docker 引擎服务，正在全力自愈自动下载配置中...${NC}"
+        if curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun; then
+            systemctl start docker 2>/dev/null || true
+            systemctl enable docker 2>/dev/null || true
+            echo -e "${GREEN}✓ Docker 引擎一键极速安装挂载就绪！${NC}"
+        else
+            echo -e "${RED}❌ 自动安装 Docker 失败。请参考 deployment.md 手动安装 Docker 环境后再试。${NC}"
+            exit 1
+        fi
+    fi
+
+    # 兼容低版本的 docker-compose 独立可执行程序和现代的 docker compose CLI 插件
+    if ! docker compose version &>/dev/null && ! command -v docker-compose &>/dev/null; then
+        echo -e "${YELLOW}发现未安装 Docker Compose 插件，正在尝试自动极速一键自愈安装...${NC}"
+        sudo curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo chmod +x /usr/local/bin/docker-compose
+        sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+        echo -e "${GREEN}✓ Docker Compose CLI 自动就绪成功。${NC}"
+    fi
+}
+
+get_compose_command() {
+    if docker compose version &>/dev/null; then
+        echo "docker compose"
+    else
+        echo "docker-compose"
+    }
+}
+
+# =========================================================================
+# 菜单 2：全新安装部署/升级版本
+# =========================================================================
+deploy_version() {
+    clear
+    echo -e "${BLUE}====================================================="
+    echo -e "       ⚡ 全新安装部署/升级更新 File Express 容器       "
+    echo -e "=====================================================${NC}"
+    
+    # 极速环境自愈检测
+    ensure_docker_env
+    
+    # 静默自愈安全环境机制：确保 .env 文件一定在此同级项目目录下以默认配置项完美落地
+    generate_default_env
+    load_env
+
+    # 确定路径安全性自愈，防止容器卷路径创建由于 root 运行导致不可读写，自动提前置备
+    mkdir -p "$STORAGE_DIR"
+    if [ ! -f "$DB_FILE" ]; then
+        echo '{"files": {}}' > "$DB_FILE"
+    fi
+    chmod 777 "$STORAGE_DIR" "$DB_FILE" 2>/dev/null || true
+
+    echo -e "请选择安装部署的镜像类型:"
+    echo -e "1) ${GREEN}手动拉取远程 GHCR 预编译高纯生产镜像 (极力推荐)${NC}"
+    echo -e "2) ${YELLOW}基于本地当前源码，现场编译成新镜像容器部署 (开箱即用)${NC}"
+    read -p "请做出您的选择 (1 或 2，默认为 1): " deploy_choice
+    [ -z "$deploy_choice" ] && deploy_choice=1
+
+    local compose_cmd=$(get_compose_command)
+
+    if [ "$deploy_choice" -eq 1 ]; then
+        echo -e "\n${BLUE}>>> 正在拉取线上发布镜像...${NC}"
+        local default_owner="alivedou"
+        local default_repo="FileExpress"
+        local default_tag="latest"
+
+        # 尝试自动检测本地 Git 仓库提取仓库归属账号
+        if [ -d "$SCRIPT_DIR/.git" ] && command -v git &> /dev/null; then
+            local remote_url=$(git config --get remote.origin.url)
+            if [[ $remote_url =~ github.com[:/]([^/]+)/([^.]+)(\.git)? ]]; then
+                default_owner="${BASH_REMATCH[1]}"
+                default_repo="${BASH_REMATCH[2]}"
+            fi
+        fi
+        
+        # 强制将名称转换为小写以防 Docker registry 不满足大写的安全协议
+        default_owner=$(echo "$default_owner" | tr '[:upper:]' '[:lower:]')
+        default_repo=$(echo "$default_repo" | tr '[:upper:]' '[:lower:]')
+
+        read -p "请输入镜像发布用户/组织账号 [默认: $default_owner]: " user_input
+        [ -z "$user_input" ] && user_input=$default_owner
+        read -p "请输入镜像包容器名称 [默认: $default_repo]: " repo_input
+        [ -z "$repo_input" ] && repo_input=$default_repo
+        read -p "请输入欲拉取的版本版本Tag [默认: latest]: " tag_input
+        [ -z "$tag_input" ] && tag_input=$default_tag
+
+        local target_image="ghcr.io/${user_input}/${repo_input}:${tag_input}"
+        echo -e "${YELLOW}正在强力呼叫网络，拉取最新预制生产镜像: $target_image...${NC}"
+        
+        if docker pull "$target_image"; then
+            echo -e "${GREEN}✓ 镜像拉取拉取完美完成！正在更新您的 docker-compose.yml 服务对应声明...${NC}"
+            if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
+                # 在 Linux 与 Unix 通用体系下，确保安全无误替换 image 列
+                if [ "$(uname)" = "Darwin" ]; then
+                    sed -i "" "s|image:.*|image: $target_image|" "$SCRIPT_DIR/docker-compose.yml"
+                else
+                    sed -i "s|image:.*|image: $target_image|" "$SCRIPT_DIR/docker-compose.yml"
+                fi
+            fi
+            
+            # 手拉并运行容器服务
+            echo -e "${YELLOW}正在全新拉起一并激活容器底层服务体系...${NC}"
+            $compose_cmd stop file-express-app 2>/dev/null || true
+            $compose_cmd rm -f file-express-app 2>/dev/null || true
+            $compose_cmd up -d
+            echo -e "\n${GREEN}★ 部署成功已在线激活上线！宿主机访问端口现设为: ${APP_PORT:-3456}${NC}"
+        else
+            echo -e "${RED}❌ 远程极速镜像拉取失败。${NC}"
+            echo -e "可能原因为：1. GitHub Containers 无法在中国大陆高可靠解析；2. 您还未执行 Actions 手动触发流。"
+            echo -e "建议直接选择 '选项 2' 即开启无需科学网络下载的本地源码直打打包编译模式。"
+        fi
+    else
+        # 本地热打包流
+        echo -e "\n${BLUE}>>> 正在启动 Docker 引擎基于当前目录下源码本地化编译打桩包...${NC}"
+        if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
+            echo -e "${RED}❌ 致命错误：当前目录下未感应到 Dockerfile，无法启动直打，过程强退！${NC}"
+        else
+            $compose_cmd up -d --build
+            echo -e "\n${GREEN}★ 本地编译及冷启动成功！宿主物理监控端口设定为: ${APP_PORT:-3456}${NC}"
+        fi
+    fi
+    read -p "按 [Enter] 键一键返回控制台主菜单..." dummy
+}
+
+# =========================================================================
+# 菜单 3：检查容器运行状态
+# =========================================================================
+check_status() {
+    clear
+    echo -e "${BLUE}====================================================="
+    echo -e "         🔍 正在实时检索当前项目容器物理部署与网卡状况 "
+    echo -e "=====================================================${NC}"
+    local compose_cmd=$(get_compose_command)
+    
+    if $compose_cmd ps &>/dev/null; then
+        $compose_cmd ps
+    else
+        # 兜底查询原生容器列表
+        docker ps -a --filter "name=file-express"
+    fi
+    echo -e "-----------------------------------------------------"
+    
+    # 动态分析 IP 输出，给予极其高水准的温馨部署链接呈现
+    local local_ip=$(hostname -I | awk '{print $1}')
+    [ -z "$local_ip" ] && local_ip="127.0.0.1"
+    load_env
+    local port=${APP_PORT:-3456}
+
+    echo -e "应用内网/虚拟机映射地址  : ${GREEN}http://${local_ip}:${port}${NC}"
+    if command -v curl &>/dev/null; then
+        local public_ip=$(curl -s --max-time 1.2 ifconfig.me || curl -s --max-time 1.2 ip.sb)
+        if [ -n "$public_ip" ]; then
+            echo -e "服务器外部推荐访问地址  : ${GREEN}http://${public_ip}:${port}${NC}"
+        fi
+    fi
+    echo -e "-----------------------------------------------------"
+    read -p "输入 [Enter] 键立刻带您重回主菜单..." dummy
+}
+
+# =========================================================================
+# 菜单 4：查看容器实时运行日志
+# =========================================================================
+view_logs() {
+    clear
+    echo -e "${BLUE}====================================================="
+    echo -e "         📋 正在切入容器流式控制日志 (Ctrl+C 退出)   "
+    echo -e "=====================================================${NC}"
+    local compose_cmd=$(get_compose_command)
+    $compose_cmd logs -f --tail=100
+}
+
+# =========================================================================
+# 菜单 5：【核心重点任务】数据初始化 (重置)
+# =========================================================================
+init_database_new() {
+    clear
+    echo -e "${RED}====================================================="
+    echo -e "             🚨 【高级危险】核心数据彻底清空与重置     "
+    echo -e "=====================================================${NC}"
+    echo -e "⚠️  该功能专属于 Docker 数据挂载卷自洁，不可撤销！"
+    echo -e "执行后，系统将彻底擦除并释放："
+    echo -e "1) ${YELLOW}宿主机上挂载已上传的全部物理体积文件${NC} ($STORAGE_DIR/*)"
+    echo -e "2) ${YELLOW}本地元数据库中的所有提取配对及传输痕迹${NC} ($DB_FILE)"
+    echo -e "-----------------------------------------------------"
+    echo -e "${GREEN}安全保活设计：您的项目端口配置、各项限额与加密密钥等环境配置文件 (.env) 将被完整保留！${NC}"
+    echo -e "-----------------------------------------------------"
+    
+    # 第一层安全拦截
+    read -p "⚠️  您确定要彻底清空上述全部数据，使快递柜一键重归净空状态吗？(y/N): " choice1
+    if [ "$choice1" != "y" ] && [ "$choice1" != "Y" ]; then
+        echo -e "${BLUE}>>> 保持现状，重置操作因用户取消而宣告中止。${NC}"
+        sleep 1.5
+        return
+    fi
+
+    # 第二层极其专业的高级双重拦截
+    echo -e "\n${RED}👿 !!危险确认警告!!${NC}"
+    echo -e "存储在 $STORAGE_DIR 中的千万数据和挂载物将在接下来灰飞烟灭！"
+    read -p "【二次阻拦验证】请输入大写字母 CONFIRM 确认重置: " choice2
+    if [ "$choice2" != "CONFIRM" ]; then
+        echo -e "${BLUE}>>> 安全拦截起效，验证码输入错误或放弃输入。重做完毕，返回主页。${NC}"
+        sleep 1.5
+        return
+    fi
+
+    # 执行流程
+    echo -e "\n${YELLOW}正在优雅中断并解除容器与文件的占锁定依赖...${NC}"
+    local compose_cmd=$(get_compose_command)
+    
+    # 停止容器以防止在文件被清除时，容器内 Node 程序由于文件被抢占引发致命底层错误
+    $compose_cmd stop &>/dev/null || true
+
+    echo -e "${YELLOW}正在强力格式化清除物理挂载路径 [local_storage]...${NC}"
+    rm -rf "$STORAGE_DIR"/*
+    mkdir -p "$STORAGE_DIR"
+
+    echo -e "${YELLOW}正在覆写本地元数据库配置 [local_db.json] 为洁净初始 JSON 格式...${NC}"
+    echo '{"files": {}}' > "$DB_FILE"
+
+    echo -e "${YELLOW}强行重置并刷新挂载点在宿主机文件层级的可读写 777 权限锁，避免容器权限阻塞...${NC}"
+    chmod 777 "$STORAGE_DIR" "$DB_FILE" 2>/dev/null || true
+
+    echo -e "${YELLOW}正在重新复活拉起应用容器，执行环境装载过程...${NC}"
+    $compose_cmd start &>/dev/null || $compose_cmd up -d &>/dev/null
+
+    echo -e "\n${GREEN}✓ 数据彻底初始化重装完美完工！${NC}"
+    echo -e "宿主机保底存储目录已净化，并以极其规范安全的方式成功挂载回归到正在热运行的 Docker 微服务实例中。"
+    echo -e "-----------------------------------------------------"
+    read -p "输入 [Enter] 键安全返回主面板..." dummy
+}
+
+# =========================================================================
+# 菜单 6：彻底卸载安装与全数据清理
+# =========================================================================
+uninstall_all() {
+    clear
+    echo -e "${RED}====================================================="
+    echo -e "             🌋 【自毁核心】彻底离线卸载此项目服务    "
+    echo -e "=====================================================${NC}"
+    echo -e "⚠️  该脚本将全自动停服、清理容器并且自毁硬盘上关于该快递柜的全部蛛丝马迹："
+    echo -e "1) 彻底停止并销毁当前项目容器实态（包含网络与虚拟数据卷）"
+    echo -e "2) 自清洗删除本地全部缓存的 ghcr.io 线上大镜像以及直打打包体积镜像"
+    echo -e "3) 强力抹除本地的物理暂存区文件、密码库、所有的 .env 配置文件"
+    echo -e "-----------------------------------------------------"
+    read -p "⚠️  输入大写 UNINSTALL 确认彻底卸载并自毁全部痕迹: " un_confirm
+    if [ "$un_confirm" != "UNINSTALL" ]; then
+        echo -e "${BLUE}>>> 取消卸载操作，全部服务和本地保全数据原封不动封存。${NC}"
+        sleep 1.5
+        return
+    fi
+
+    echo -e "\n${YELLOW}正在停服、移出全部容器实体...${NC}"
+    local compose_cmd=$(get_compose_command)
+    $compose_cmd down --rmi all --volumes --remove-orphans 2>/dev/null || true
+
+    echo -e "${YELLOW}正在重清洗并抹除全部持久层配置，包含密钥与本地文件袋...${NC}"
+    rm -rf "$STORAGE_DIR"
+    rm -f "$DB_FILE"
+    rm -f "$ENV_FILE"
+
+    echo -e "\n${RED}✓ 整个文件快递柜服务已完全从本机连根拔起卸载成功，无任何持久残留。${NC}"
+    sleep 3
+    exit 0
+}
+
+# =========================================================================
+# 全新统一中控交互主循环（纯化专属 Docker 管理板）
+# =========================================================================
 while true; do
     clear
-    echo -e "${BLUE}========================================"
-    echo -e "    File Express 管理工具 (FE CLI)     "
-    echo -e "=======================================${NC}"
-    echo -e "1. ${GREEN}项目配置${NC} (环境变量与限额)"
-    echo -e "2. ${YELLOW}数据库初始化${NC} (清空已有数据)"
-    echo -e "3. ${BLUE}前台运行测试${NC} (Ctrl+C 退出)"
-    echo -e "4. ${GREEN}后台稳定运行${NC} (系统静默挂载)"
-    echo -e "5. ${RED}停止后台运行${NC} (终结挂载进程)"
-    echo -e "6. ${BLUE}高级选项${NC} (全局命令/全量卸载)"
-    echo -e "7. 🐳 ${GREEN}Docker 部署面板${NC} (极其推荐一键容器运维)"
-    echo -e "8. 退出菜单"
-    echo -e "----------------------------------------"
-    read -p "请选择 (1-8): " main_choice
+    echo -e "${GREEN}====================================================="
+    echo -e "      🐳 File Express 文件传输快递柜 Docker 运维控制台 "
+    echo -e "=====================================================${NC}"
+    echo -e "当前执行根路径: ${YELLOW}$SCRIPT_DIR${NC}"
+    echo -e "-----------------------------------------------------"
+    echo -e "1. ⚙️  项目配置         (引导修改端口、存储配额及加密密钥)"
+    echo -e "2. ⚡ 全新安装部署/升级 (交互选择在线镜像或本地源码冷拉起)"
+    echo -e "3. 🔍 检查容器运行状态 (秒级监控容器活跃态与宿主解析物理链)"
+    echo -e "4. 📋 查看容器实时日志 (极其便于运维监控，流式日志输出)"
+    echo -e "5. 🧹 数据初始化       (【核心重置】双重拦截，只清空文件/不丢配置)"
+    echo -e "6. ❌ 彻底卸载与隔离   (全盘自毁、物理性下架删除所有缓存)"
+    echo -e "7. 🚪 退出脚本"
+    echo -e "-----------------------------------------------------"
+    read -p "您想要执行的控制台指令是 (1-7): " main_choice
 
     case $main_choice in
         1) project_config ;;
-        2) init_database ;;
-        3) run_app false ;;
-        4) run_app true ;;
-        5) stop_app_bg ;;
-        6) advanced_options ;;
-        7) docker_panel ;;
-        8) echo "再见！" ; exit 0 ;;
-        *) echo -e "${RED}无效选择 (1-8)${NC}" ; sleep 1 ;;
+        2) deploy_version ;;
+        3) check_status ;;
+        4) view_logs ;;
+        5) init_database_new ;;
+        6) uninstall_all ;;
+        7) echo -e "\n${BLUE}正在退出 Docker 终端运维中控，感谢您的使用，祝生活愉快！再见。${NC}" ; exit 0 ;;
+        *) echo -e "${RED}❌ 无效选项，请输入正确的数字进行对应服务器子控制。${NC}" ; sleep 1.5 ;;
     esac
 done
