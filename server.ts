@@ -575,7 +575,7 @@ app.get("/api/view/:id", async (req, res) => {
 /**
  * 批量上传辅助接口：用于演示或其他便捷脚本调用
  */
-app.post("/api/batch-upload", upload.single("file"), async (req, res) => {
+app.post("/api/batch-upload", upload.single("file"), async (req: Request, res: Response) => {
     if (!req.file || !req.file.originalname.endsWith(".txt")) {
         return res.status(400).send("Error: 仅允许 .txt 文件。\n");
     }
