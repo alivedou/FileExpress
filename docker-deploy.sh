@@ -14,8 +14,10 @@ echo -e "${GREEN}=== File Express Docker 一键部署 ===${NC}"
 
 # 1. 检查 Docker
 if ! docker info &>/dev/null; then
-    echo -e "${RED}Docker 未运行，请先安装并启动 Docker。${NC}"
-    echo "Ubuntu/Debian: curl -fsSL https://get.docker.com | bash"
+    echo -e "${RED}Docker daemon 未运行。${NC}"
+    echo "WSL: 请先打开 Windows 上的 Docker Desktop"
+    echo "VPS: sudo systemctl start docker"
+    echo "安装: curl -fsSL https://get.docker.com | bash"
     exit 1
 fi
 echo -e "${GREEN}✓ Docker 运行中${NC}"

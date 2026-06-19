@@ -1,7 +1,9 @@
 # ==========================================
 # 阶段 1: 构建阶段 (Build Stage)
+# 国内用户默认走镜像加速，海外用户构建时加 --build-arg REGISTRY=docker.io
 # ==========================================
-FROM node:22-alpine AS builder
+ARG REGISTRY=docker.m.daocloud.io
+FROM ${REGISTRY}/library/node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -24,7 +26,8 @@ RUN npm run build
 # ==========================================
 # 阶段 2: 运行阶段 (Run Stage)
 # ==========================================
-FROM node:22-alpine AS runner
+ARG REGISTRY=docker.1ms.run
+FROM ${REGISTRY}/library/node:22-alpine AS runner
 
 WORKDIR /app
 

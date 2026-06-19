@@ -201,8 +201,6 @@ ensure_docker_env() {
     if ! command -v docker &>/dev/null; then
         echo -e "${YELLOW}发现当前系统中未部署 Docker 引擎服务，正在全力自愈自动下载配置中...${NC}"
         if curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun; then
-            systemctl start docker 2>/dev/null || true
-            systemctl enable docker 2>/dev/null || true
             echo -e "${GREEN}✓ Docker 引擎一键极速安装挂载就绪！${NC}"
         else
             echo -e "${RED}❌ 自动安装 Docker 失败。请参考 deployment.md 手动安装 Docker 环境后再试。${NC}"
