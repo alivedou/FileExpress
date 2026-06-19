@@ -26,7 +26,7 @@ RUN npm run build
 # ==========================================
 # 阶段 2: 运行阶段 (Run Stage)
 # ==========================================
-ARG REGISTRY=docker.1ms.run
+ARG REGISTRY=docker.m.daocloud.io
 FROM ${REGISTRY}/library/node:22-alpine AS runner
 
 WORKDIR /app

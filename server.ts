@@ -3,7 +3,7 @@
  * 作者: adou
  * 功能：提供文件加密存储、提取、公开分享及存储容量熔断机制
  */
-import express from "express";
+import express, { type Request, type Response } from "express";
 import path from "path";
 import "dotenv/config";
 import { createServer as createViteServer } from "vite";
@@ -234,7 +234,7 @@ app.get("/api/config", (req, res) => {
  * 公开模式上传接口
  * 仅允许 .txt 文件，直接存入 JSON 数据库，不进行加密（因为是公开分享）
  */
-app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterError, async (req, res) => {
+app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterError, async (req: Request, res: Response) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -315,7 +315,7 @@ app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterE
  * 私密柜上传接口
  * 支持多格式，强制进行 AES 加密，元数据存 JSON，二进制存硬盘
  */
-app.post("/api/upload/private", rateLimiter, upload.array("files"), handleMulterError, async (req, res) => {
+app.post("/api/upload/private", rateLimiter, upload.array("files"), handleMulterError, async (req: Request, res: Response) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -522,7 +522,10 @@ app.get("/api/download/:code", async (req, res) => {
         }
 
         // 设置下载头，防止浏览器尝试预览（如图片或文本）
-        res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(record.fileName)}"`);
+        // 使用 RFC 5987 filename*=UTF-8'' 格式正确显示中文文件名
+        const rawName = record.fileName || "download";
+        const asciiName = rawName.replace(/[^\x20-\x7E]/g, '_');
+        res.setHeader("Content-Disposition", `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(rawName)}`);
         res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
         
         // 增加下载次数并销毁
