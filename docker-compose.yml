@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
   file-express:
+    # 本地编译模式（默认）。如需切换 GHCR 预编译镜像，用 fe.sh 选项1 自动处理
     build: .
-    image: file-express:latest
     container_name: file-express-app
     restart: always
     ports:

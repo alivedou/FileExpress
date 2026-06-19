@@ -218,6 +218,22 @@ ensure_docker_env() {
         sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
         echo -e "${GREEN}✓ Docker Compose CLI 自动就绪成功。${NC}"
     fi
+
+    # 验证 Docker daemon 是否真正在运行
+    if ! docker info &>/dev/null; then
+        echo -e "${YELLOW}Docker daemon 未运行，尝试启动...${NC}"
+        if command -v systemctl &>/dev/null; then
+            sudo systemctl start docker 2>/dev/null || true
+        elif command -v service &>/dev/null; then
+            sudo service docker start 2>/dev/null || true
+        fi
+        sleep 2
+        if ! docker info &>/dev/null; then
+            echo -e "${RED}❌ Docker daemon 无法启动。请手动执行 'sudo systemctl start docker' 后重试。${NC}"
+            exit 1
+        fi
+    fi
+    echo -e "${GREEN}✓ Docker 引擎运行正常。${NC}"
 }
 
 get_compose_command() {
@@ -262,8 +278,8 @@ deploy_version() {
     if [ "$deploy_choice" -eq 1 ]; then
         echo -e "\n${BLUE}>>> 正在拉取线上发布镜像...${NC}"
         local default_owner="alivedou"
-        local default_repo="FileExpress"
-        local default_tag="v1.0.0"
+        local default_repo="fileexpress"
+        local default_tag="latest"
 
         # 尝试自动检测本地 Git 仓库提取仓库归属账号
         if [ -d "$SCRIPT_DIR/.git" ] && command -v git &> /dev/null; then
@@ -289,41 +305,66 @@ deploy_version() {
         echo -e "${YELLOW}正在强力呼叫网络，拉取最新预制生产镜像: $target_image...${NC}"
         
         if docker pull "$target_image"; then
-            echo -e "${GREEN}✓ 镜像拉取拉取完美完成！正在更新您的 docker-compose.yml 服务对应声明...${NC}"
+            echo -e "${GREEN}✓ 镜像拉取完美完成！正在更新您的 docker-compose.yml 服务对应声明...${NC}"
             if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
-                # 在 Linux 与 Unix 通用体系下，确保安全无误替换 image 列
+                # 将 build: . 替换为 image: ghcr.io/xxx，防止 Docker Compose 仍然触发本地编译
+                # 同时也移除可能残留的旧 image 行
                 if [ "$(uname)" = "Darwin" ]; then
-                    sed -i "" "s|image:.*|image: $target_image|" "$SCRIPT_DIR/docker-compose.yml"
+                    sed -i "" "s|^\s*build:.*|    image: $target_image|" "$SCRIPT_DIR/docker-compose.yml"
+                    sed -i "" "s|^\s*image:.*|    image: $target_image|" "$SCRIPT_DIR/docker-compose.yml"
                 else
-                    sed -i "s|image:.*|image: $target_image|" "$SCRIPT_DIR/docker-compose.yml"
+                    sed -i "s|^\s*build:.*|    image: $target_image|" "$SCRIPT_DIR/docker-compose.yml"
+                    sed -i "s|^\s*image:.*|    image: $target_image|" "$SCRIPT_DIR/docker-compose.yml"
                 fi
             fi
             
             # 先全量拆除旧容器及网络，确保端口映射使用最新 .env 配置
             echo -e "${YELLOW}正在拆除旧容器并全新拉起服务...${NC}"
             $compose_cmd down 2>/dev/null || true
-            $compose_cmd up -d
+            if ! $compose_cmd up -d; then
+                echo -e "${RED}❌ 容器启动失败！请检查日志: $compose_cmd logs${NC}"
+                sleep 3
+                return
+            fi
             echo -e "\n${GREEN}★ 部署成功已在线激活上线！${NC}"
             refresh_public_ip
             echo ""
             show_access_urls
         else
-            echo -e "${RED}❌ 远程极速镜像拉取失败。${NC}"
-            echo -e "可能原因为：1. GitHub Containers 无法在中国大陆高可靠解析；2. 您还未执行 Actions 手动触发流。"
-            echo -e "建议直接选择 '选项 2' 即开启无需科学网络下载的本地源码直打打包编译模式。"
+            echo -e "${RED}❌ 镜像拉取失败。${NC}"
+            echo -e "可能原因："
+            echo -e "  1. 镜像尚未发布（需先在 GitHub Actions 手动触发 docker-publish 工作流）"
+            echo -e "  2. GitHub Container Registry 在中国大陆解析慢/不可达"
+            echo -e "  3. 镜像 tag '${tag_input}' 不存在，尝试用 'latest'"
+            echo -e "\n${YELLOW}建议：选 '选项2' 用本地源码直接打包编译，无需网络拉取镜像。${NC}"
+            sleep 2
         fi
     else
         # 本地热打包流
         echo -e "\n${BLUE}>>> 正在启动 Docker 引擎基于当前目录下源码本地化编译打桩包...${NC}"
         if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
             echo -e "${RED}❌ 致命错误：当前目录下未感应到 Dockerfile，无法启动直打，过程强退！${NC}"
-        else
-            $compose_cmd up -d --build
-            echo -e "\n${GREEN}★ 本地编译及冷启动成功！${NC}"
-            refresh_public_ip
-            echo ""
-            show_access_urls
+            sleep 2
+            return
         fi
+        # 本地编译也需要先把 build 行还原（如果之前被 GHCR 模式替换过）
+        if ! grep -q "^\s*build:" "$SCRIPT_DIR/docker-compose.yml"; then
+            if [ "$(uname)" = "Darwin" ]; then
+                sed -i "" "s|^\s*image:.*|    build: .|" "$SCRIPT_DIR/docker-compose.yml"
+            else
+                sed -i "s|^\s*image:.*|    build: .|" "$SCRIPT_DIR/docker-compose.yml"
+            fi
+        fi
+        if ! $compose_cmd up -d --build; then
+            echo -e "${RED}❌ 本地编译/启动失败！请检查上方错误信息。常见原因：端口被占用、磁盘空间不足。${NC}"
+            echo -e "查看完整日志: $compose_cmd logs"
+            sleep 3
+            return
+        fi
+        echo -e "\n${GREEN}★ 本地编译及冷启动成功！${NC}"
+        refresh_public_ip
+        echo ""
+        show_access_urls
     fi
     read -p "按 [Enter] 键一键返回控制台主菜单..." dummy
 }
