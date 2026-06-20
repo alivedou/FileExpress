@@ -55,7 +55,7 @@ generate_default_env() {
         local rand_jwt=$(generate_random_secret)
         cat <<EOF > "$ENV_FILE"
 NODE_ENV=production
-APP_PORT=3000
+PORT=3000
 APP_NAME=File Express
 APP_SUBTITLE=极简、安全、临时的文件传输中心
 MAX_SINGLE_FILE_SIZE_MB=10
@@ -140,7 +140,7 @@ refresh_public_ip() {
 
 show_access_urls() {
     load_env
-    local port=${APP_PORT:-3000}
+    local port=${PORT:-3000}
 
     if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qE 'file-express(-app)?'; then
         echo -e "应用状态          : ${YELLOW}⚠ 未部署（选菜单 2 部署）${NC}"
@@ -184,7 +184,7 @@ project_config() {
         echo -e " 3. 存储配额      : ${GREEN}${quota_gb} GB${NC} (可用: $(get_disk_free))"
         echo -e " 4. 单文件上限    : ${GREEN}${MAX_SINGLE_FILE_SIZE_MB:-10} MB${NC}"
         echo -e " 5. ZIP 上限      : ${GREEN}${MAX_ZIP_PAYLOAD_SIZE_MB:-50} MB${NC}"
-        echo -e " 6. 映射端口      : ${GREEN}${APP_PORT:-3000}${NC}"
+        echo -e " 6. 映射端口      : ${GREEN}${PORT:-3000}${NC}"
         echo -e " 7. 保存时长      : ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
         echo -e " 8. 提取上限      : ${GREEN}${MAX_DOWNLOADS:-100} 次${NC}"
         echo -e " 9. 加密密钥      : ${YELLOW}${STORAGE_ENCRYPTION_KEY:-未设置}${NC}"
@@ -208,7 +208,7 @@ project_config() {
             6)
                 read -p "宿主机端口: " v
                 if [ -n "$v" ]; then
-                    save_env_var "APP_PORT" "$v"
+                    save_env_var "PORT" "$v"
                     echo -e "\n${YELLOW}⚠ 端口已更新为 $v，需重建容器生效${NC}"
                     read -p "是否立即重建？(Y/n): " rc
                     if [ "$rc" != "n" ] && [ "$rc" != "N" ]; then
@@ -216,9 +216,9 @@ project_config() {
                         local img=$(get_image)
                         docker stop file-express 2>/dev/null && docker rm file-express 2>/dev/null || true
                         docker run -d --name file-express --restart always \
-                            -p "${APP_PORT:-3000}:3000" \
+                            -p "${PORT:-3000}:3000" \
                             --env-file "$ENV_FILE" \
-                            -e APP_PORT=3000 \
+                            -e PORT=3000 \
                             -v "$STORAGE_DIR:/app/local_storage" \
                             -v "$DB_FILE:/app/local_db.json" \
                             "$img" && save_image "$img"
@@ -271,9 +271,9 @@ deploy_version() {
     docker stop file-express 2>/dev/null && docker rm file-express 2>/dev/null || true
 
     if ! docker run -d --name file-express --restart always \
-            -p "${APP_PORT:-3000}:3000" \
+            -p "${PORT:-3000}:3000" \
             --env-file "$ENV_FILE" \
-            -e APP_PORT=3000 \
+            -e PORT=3000 \
         -v "$STORAGE_DIR:/app/local_storage" \
         -v "$DB_FILE:/app/local_db.json" \
         "$target_image"; then
@@ -364,9 +364,9 @@ data_reset() {
     docker start file-express 2>/dev/null || {
         local img=$(get_image)
         docker run -d --name file-express --restart always \
-            -p "${APP_PORT:-3000}:3000" \
+            -p "${PORT:-3000}:3000" \
             --env-file "$ENV_FILE" \
-            -e APP_PORT=3000 \
+            -e PORT=3000 \
             -v "$STORAGE_DIR:/app/local_storage" \
             -v "$DB_FILE:/app/local_db.json" \
             "$img" 2>/dev/null
