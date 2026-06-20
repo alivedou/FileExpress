@@ -7,9 +7,32 @@ A minimalist, secure, and ephemeral file transfer hub.
 ### ⚡ One-Click Cloud Deployment (Highly Recommended)
 For a premium, instant VPS or Linux workstation installation, just copy and execute this single command:
 ```bash
-bash <(curl -sSfL https://raw.githubusercontent.com/alivedou/FileExpress/main/fe.sh)
+bash <(curl -sSfL https://raw.githubusercontent.com/alivedou/FileExpress/v2/fe.sh)
 ```
 This script will guide you to configure environment, manage and run the application daemon cleanly!
+
+### 🐳 Docker / Container Platform Deployment
+
+**VPS (via GHCR pre-built image):**
+
+```bash
+docker pull ghcr.io/alivedou/fileexpress:latest
+docker run -d --name file-express --restart always \
+  -p 3000:3000 \
+  -e PORT=3000 \
+  -v fileexpress_data:/app/local_storage \
+  ghcr.io/alivedou/fileexpress:latest
+```
+
+Or use the all-in-one management script:
+```bash
+curl -sSfL https://raw.githubusercontent.com/alivedou/FileExpress/v2/fe.sh -o fe.sh
+chmod +x fe.sh && ./fe.sh
+```
+
+**Container Platforms (Railway / DCDeploy / Render / Fly.io):**
+
+Just connect your GitHub repository — the platform auto-detects the `Dockerfile` and injects `PORT`. Zero manual configuration needed. All other variables (storage limits, encryption key, etc.) come with safe defaults.
 
 ### 🛠️ Manual Installation from Source
 
@@ -50,7 +73,7 @@ chmod +x fe.sh
 
 > **Configuration (`FE` Menu / `.env` file):**
 > File Express can be customized through the CLI menu or directly by editing the `.env` file. Important variables include:
-> - `APP_PORT`: Custom port for the server (default `3000`).
+> - `PORT`: Custom port for the server (default `3000`).
 > - `MAX_STORAGE_HOURS`: The maximum allowed duration for private files (default `24` hours). Change this value to allow longer ephemeral storage.
 > - `MAX_DOWNLOADS`: The maximum allowed extraction count for private files (default `100` times).
 > - `MAX_TOTAL_STORAGE_MB`: Overall max disk usage to prevent system overload.
