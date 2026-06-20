@@ -52,7 +52,6 @@ generate_default_env() {
     if [ ! -f "$ENV_FILE" ]; then
         echo -e "${YELLOW}未检测到现有环境配置，正在同级目录下自动定制专属 .env 配置文件...${NC}"
         local rand_enc=$(generate_random_secret)
-        local rand_jwt=$(generate_random_secret)
         cat <<EOF > "$ENV_FILE"
 NODE_ENV=production
 PORT=3000
@@ -62,7 +61,6 @@ MAX_SINGLE_FILE_SIZE_MB=10
 MAX_ZIP_PAYLOAD_SIZE_MB=50
 MAX_TOTAL_STORAGE_MB=1024
 STORAGE_ENCRYPTION_KEY=$rand_enc
-JWT_SECRET=$rand_jwt
 MAX_STORAGE_HOURS=24
 MAX_DOWNLOADS=100
 EOF
@@ -188,12 +186,11 @@ project_config() {
         echo -e " 7. 保存时长      : ${GREEN}${MAX_STORAGE_HOURS:-24} 小时${NC}"
         echo -e " 8. 提取上限      : ${GREEN}${MAX_DOWNLOADS:-100} 次${NC}"
         echo -e " 9. 加密密钥      : ${YELLOW}${STORAGE_ENCRYPTION_KEY:-未设置}${NC}"
-        echo -e "10. JWT 密钥      : ${YELLOW}${JWT_SECRET:-默认}${NC}"
         echo -e "-----------------------------------------------------"
         echo -e " s. 保存返回 | q. 放弃返回"
         echo -e "-----------------------------------------------------"
 
-        read -p "请输入编号 (1-10, s/q): " cfg_choice
+        read -p "请输入编号 (1-9, s/q): " cfg_choice
         case $cfg_choice in
             1) read -p "应用名称: " v; [ -n "$v" ] && save_env_var "APP_NAME" "$v" ;;
             2) read -p "副标题: " v; [ -n "$v" ] && save_env_var "APP_SUBTITLE" "$v" ;;
@@ -231,7 +228,6 @@ project_config() {
             7) read -p "保存时长 (小时): " v; [ -n "$v" ] && save_env_var "MAX_STORAGE_HOURS" "$v" ;;
             8) read -p "提取上限 (次): " v; [ -n "$v" ] && save_env_var "MAX_DOWNLOADS" "$v" ;;
             9) read -p "加密密钥: " v; [ -n "$v" ] && save_env_var "STORAGE_ENCRYPTION_KEY" "$v" ;;
-            10) read -p "JWT 密钥: " v; [ -n "$v" ] && save_env_var "JWT_SECRET" "$v" ;;
             s|q) break ;;
             *) echo -e "${RED}❌ 无效编号${NC}"; sleep 1 ;;
         esac
