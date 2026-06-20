@@ -36,7 +36,7 @@ if [ ! -f .env ]; then
     JWT_KEY=$(openssl rand -hex 16 2>/dev/null || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
     cat <<EOF > .env
 NODE_ENV=production
-APP_PORT=3000
+PORT=3000
 APP_NAME=File Express
 APP_SUBTITLE=极简、安全、临时的文件传输中心
 MAX_SINGLE_FILE_SIZE_MB=10
@@ -62,7 +62,7 @@ if docker compose ps | grep -q "Up"; then
     echo ""
     echo -e "${GREEN}=========================================="
     echo "  ✓ 部署成功！"
-    echo "  访问地址: http://$(curl -s ifconfig.me 2>/dev/null || echo '你的VPS IP'):${APP_PORT:-3000}"
+    echo "  访问地址: http://$(curl -s ifconfig.me 2>/dev/null || echo '你的VPS IP'):${PORT:-3000}"
     echo "==========================================${NC}"
 else
     echo -e "${RED}容器未正常运行，查看日志：docker compose logs${NC}"
