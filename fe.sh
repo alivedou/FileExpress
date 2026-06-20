@@ -426,6 +426,8 @@ while true; do
     clear
     echo -e "${GREEN}====================================================="
     echo -e "      🐳 File Express 运维控制台                      "
+    echo -e "      作者: ${YELLOW}adou${NC}"
+    echo -e "      仓库: ${BLUE}https://github.com/alivedou/FileExpress${NC}"
     echo -e "=====================================================${NC}"
     echo -e "路径: ${YELLOW}$SCRIPT_DIR${NC}"
     echo -e "-----------------------------------------------------"
