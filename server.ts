@@ -159,6 +159,31 @@ function handleMulterError(err: any, req: express.Request, res: express.Response
     next(err);
 }
 
+// 修复 multipart/form-data 上传文件名编码
+// 部分浏览器/客户端以 Latin-1 方式发送 UTF-8 文件名，导致 multer 解析后出现乱码
+// 通过 Buffer 回退还原：取乱码字符串 → 按 Latin-1 编码为字节 → 按 UTF-8 解码
+function fixEncoding(name: string): string {
+    // 如果已包含常见中文字符，说明编码正常，无需修复
+    if (/[\u4e00-\u9fff]/.test(name)) return name;
+    try {
+        const fixed = Buffer.from(name, 'latin1').toString('utf8');
+        // 修复后包含中文，说明确实是被错误解码的 UTF-8 文件名
+        if (/[\u4e00-\u9fff]/.test(fixed)) return fixed;
+    } catch {}
+    return name;
+}
+
+// 中间件：自动修复 req.file / req.files 中的文件名编码
+function fixUploadEncoding(req: any, _res: express.Response, next: express.NextFunction) {
+    if (req.file) req.file.originalname = fixEncoding(req.file.originalname);
+    if (req.files) {
+        (req.files as Express.Multer.File[]).forEach(f => {
+            f.originalname = fixEncoding(f.originalname);
+        });
+    }
+    next();
+}
+
 // --- API 路由 ---
 
 // 健康检查接口
@@ -234,7 +259,7 @@ app.get("/api/config", (req, res) => {
  * 公开模式上传接口
  * 仅允许 .txt 文件，直接存入 JSON 数据库，不进行加密（因为是公开分享）
  */
-app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterError, async (req: Request, res: Response) => {
+app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterError, fixUploadEncoding, async (req: Request, res: Response) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -315,7 +340,7 @@ app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterE
  * 私密柜上传接口
  * 支持多格式，强制进行 AES 加密，元数据存 JSON，二进制存硬盘
  */
-app.post("/api/upload/private", rateLimiter, upload.array("files"), handleMulterError, async (req: Request, res: Response) => {
+app.post("/api/upload/private", rateLimiter, upload.array("files"), handleMulterError, fixUploadEncoding, async (req: Request, res: Response) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -521,7 +546,7 @@ app.get("/api/download/:code", async (req, res) => {
             }
         }
 
-         // 设置下载头，使用 Express res.attachment() 自动处理中文字符编码
+        // 设置下载头，使用 Express res.attachment() 自动处理中文字符编码
         // 内部调用 content-disposition 包，兼容 iOS Safari/微信等移动端浏览器
         const rawName = record.fileName || "download";
         res.attachment(rawName);
@@ -574,7 +599,7 @@ app.get("/api/view/:id", async (req, res) => {
 /**
  * 批量上传辅助接口：用于演示或其他便捷脚本调用
  */
-app.post("/api/batch-upload", upload.single("file"), async (req: Request, res: Response) => {
+app.post("/api/batch-upload", upload.single("file"), fixUploadEncoding, async (req: Request, res: Response) => {
     if (!req.file || !req.file.originalname.endsWith(".txt")) {
         return res.status(400).send("Error: 仅允许 .txt 文件。\n");
     }
