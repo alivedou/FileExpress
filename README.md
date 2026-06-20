@@ -7,7 +7,11 @@ A minimalist, secure, and ephemeral file transfer hub.
 ### ⚡ One-Click Cloud Deployment (Highly Recommended)
 For a premium, instant VPS or Linux workstation installation, just copy and execute this single command:
 ```bash
-bash <(curl -sSfL https://raw.githubusercontent.com/alivedou/FileExpress/v2/fe.sh)
+curl -sSfL https://raw.githubusercontent.com/alivedou/FileExpress/v2/fe.sh -o fe.sh && chmod +x fe.sh && ./fe.sh
+```
+If `curl` is not installed, try `wget`:
+```bash
+wget -qO fe.sh https://raw.githubusercontent.com/alivedou/FileExpress/v2/fe.sh && chmod +x fe.sh && ./fe.sh
 ```
 This script will guide you to configure environment, manage and run the application daemon cleanly!
 
