@@ -33,7 +33,7 @@ WORKDIR /app
 
 # 设置生产环境环境变量
 ENV NODE_ENV=production
-ENV APP_PORT=3000
+ENV PORT=3000
 
 # 建立应用所需的数据目录，并把 /app 下所有文件的所有权移交给主镜像自带的非特权用户 node
 RUN mkdir -p /app/local_storage && \
