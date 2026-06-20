@@ -521,11 +521,10 @@ app.get("/api/download/:code", async (req, res) => {
             }
         }
 
-        // 设置下载头，防止浏览器尝试预览（如图片或文本）
-        // 使用 RFC 5987 filename*=UTF-8'' 格式正确显示中文文件名
+         // 设置下载头，使用 Express res.attachment() 自动处理中文字符编码
+        // 内部调用 content-disposition 包，兼容 iOS Safari/微信等移动端浏览器
         const rawName = record.fileName || "download";
-        const asciiName = rawName.replace(/[^\x20-\x7E]/g, '_');
-        res.setHeader("Content-Disposition", `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(rawName)}`);
+        res.attachment(rawName);
         res.setHeader("Content-Type", record.mimeType || "application/octet-stream");
         
         // 增加下载次数并销毁
