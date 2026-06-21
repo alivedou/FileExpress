@@ -6,11 +6,19 @@
 # 纯 Docker 命令，零依赖 compose
 # =========================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="$SCRIPT_DIR/.env"
-DB_FILE="$SCRIPT_DIR/local_db.json"
-STORAGE_DIR="$SCRIPT_DIR/local_storage"
-IMAGE_CACHE="$SCRIPT_DIR/.image_cache"
+# 安装根目录：优先用 FE_HOME 环境变量，否则 /opt/fileexpress，兜底脚本所在目录
+if [ -n "$FE_HOME" ]; then
+    BASE_DIR="$FE_HOME"
+elif [ -d "/opt" ] && [ -w "/opt" ] || [ "$(id -u)" = "0" ]; then
+    BASE_DIR="/opt/fileexpress"
+else
+    BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+mkdir -p "$BASE_DIR"
+ENV_FILE="$BASE_DIR/.env"
+DB_FILE="$BASE_DIR/local_db.json"
+STORAGE_DIR="$BASE_DIR/local_storage"
+IMAGE_CACHE="$BASE_DIR/.image_cache"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -70,11 +78,11 @@ EOF
 }
 
 get_disk_free() {
-    df -h "$SCRIPT_DIR" | awk 'NR==2 {print $4}'
+    df -h "$BASE_DIR" | awk 'NR==2 {print $4}'
 }
 
 get_recommended_storage() {
-    local available_kb=$(df -k "$SCRIPT_DIR" | awk 'NR==2 {print $4}')
+    local available_kb=$(df -k "$BASE_DIR" | awk 'NR==2 {print $4}')
     local available_gb=$((available_kb / 1024 / 1024))
     local recommended=$((available_gb * 4 / 10))
     [ "$recommended" -lt 1 ] && recommended=1
@@ -127,7 +135,7 @@ ensure_data_dirs() {
     chmod 777 "$STORAGE_DIR" "$DB_FILE" 2>/dev/null || true
 }
 
-CACHE_IP_FILE="$SCRIPT_DIR/.external_ip"
+CACHE_IP_FILE="$BASE_DIR/.external_ip"
 
 refresh_public_ip() {
     if command -v curl &>/dev/null; then
@@ -425,7 +433,7 @@ while true; do
     echo -e "      作者: ${YELLOW}adou${NC}"
     echo -e "      仓库: ${BLUE}https://github.com/alivedou/FileExpress${NC}"
     echo -e "=====================================================${NC}"
-    echo -e "路径: ${YELLOW}$SCRIPT_DIR${NC}"
+    echo -e "路径: ${YELLOW}$BASE_DIR${NC}"
     echo -e "-----------------------------------------------------"
     show_access_urls
     echo -e "-----------------------------------------------------"
