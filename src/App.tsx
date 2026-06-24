@@ -60,7 +60,9 @@ const translations = {
     uploadLimit: "文件体积限制",
     decrypting: "正在解密数据...",
     encryptedStatus: "数据已进行 AES-256 加密存储",
-    decryptionError: "数据解密失败，加密密钥不正确或已更改"
+    decryptionError: "数据解密失败，加密密钥不正确或已更改",
+    disclaimerShort: "⚠ 本站为个人实验项目，严禁上传违法违规内容。使用即视为同意免责条款。详见「使用说明」",
+    disclaimerFull: `\n══════════════ 免责声明 ══════════════\n\n本站（文件快递柜）为个人非营利性技术实验项目，\n仅提供合法的、临时的文件加密传输中转服务。\n\n1. 严禁上传、分享任何违反法律法规、侵犯他人权益、\n   淫秽色情、暴力恐怖、木马病毒等非法内容。\n   一经发现，本站将立即销毁数据并配合相关部门处理。\n\n2. 本站采用「阅后即焚」机制，文件到期或达提取次数后\n   自动销毁。本站不对数据的永久性、安全性、完整性\n   作任何承诺。请用户自行备份重要数据。\n\n3. 文件内容均由上传者提供，不代表本站立场。\n   因使用本站服务产生的任何纠纷或损失，本站不承担责任。\n\n4. 本站有权根据服务器状态（如磁盘不足、恶意攻击等）\n   随时暂停或终止服务，恕不另行通知。\n\n使用本站即表示您已阅读并同意以上条款。`
   },
   en: {
     // ... 英文翻译保持不变 ...
@@ -108,7 +110,9 @@ const translations = {
     uploadLimit: "Volume Limits",
     decrypting: "Decrypting payload...",
     encryptedStatus: "AES-256 Encrypted",
-    decryptionError: "Decryption failed. Key is incorrect or has been changed."
+    decryptionError: "Decryption failed. Key is incorrect or has been changed.",
+    disclaimerShort: "⚠ Personal experimental project. Illegal content prohibited. By using this service you agree to our disclaimer. See Guide.",
+    disclaimerFull: `\n══════════════ DISCLAIMER ══════════════\n\nThis site (File Express) is a personal, non-commercial\ntechnical experiment providing temporary encrypted file transfer.\n\n1. Uploading or sharing illegal content, infringing content,\n   pornography, violence, malware, etc. is strictly prohibited.\n   Violations will result in immediate data destruction\n   and cooperation with authorities.\n\n2. This site operates on an auto-deletion model.\n   No guarantees are made regarding data permanence,\n   security, or integrity. Users should back up important data.\n\n3. All content is provided by uploaders and does not\n   represent the views of this site. The site assumes no\n   liability for disputes or losses arising from use.\n\n4. The site may suspend or terminate service at any time\n   due to server conditions (disk shortage, attacks, etc.)\n   without prior notice.\n\nBy using this site, you acknowledge and agree to these terms.`
   }
 };
 
@@ -252,7 +256,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
 
   // 动态更新使用说明
   const dynamicNotice = useMemo(() => {
-    if (!config) return t.noticeFull;
+    if (!config) return t.noticeFull + t.disclaimerFull;
     const hours = config.maxStorageHours || 24;
     const downloads = config.maxDownloads || 100;
     const zip = config.maxZipPayloadMB || 50;
@@ -264,7 +268,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
 3. 私密文件达到设定的提取次数 (${downloads} 次) 或时长 (${hours} 小时) 后物理销毁。
 4. 公开内容通过 ${config.encryptionStatus ? '服务器安全密钥' : '全局通用密钥'} 加固。
 
-项目作者: adou`;
+项目作者: adou${t.disclaimerFull}`;
     } else {
       return `【 USAGE GUIDE 】
 1. ZIP total limit: ${zip} MB.
@@ -272,7 +276,7 @@ function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }
 3. Records destroyed after ${downloads} downloads or ${hours} hours.
 4. Security: ${config.encryptionStatus ? 'Custom Private Keys' : 'Global Keys'} active.
 
-Author: adou`;
+Author: adou${t.disclaimerFull}`;
     }
   }, [t, config, lang]);
 
@@ -389,6 +393,13 @@ Author: adou`;
         <div className="text-[11px] text-[var(--text-secondary)] opacity-40 italic">{t.encryptedStatus}</div>
       </div>
 
+      {/* 免责声明 */}
+      <div className="mt-3 text-center">
+        <p className="text-[9px] sm:text-[10px] text-[var(--text-secondary)] opacity-25 leading-relaxed max-w-lg mx-auto">
+          {t.disclaimerShort}
+        </p>
+      </div>
+
       {/* 使用说明弹窗 */}
       <AnimatePresence>
         {showNotice && (
@@ -465,7 +476,7 @@ function PublicSquare({ t, refreshKey }: { t: any, refreshKey: number }) {
         files.map(file => (
           <motion.div 
             key={file.id} 
-            whileHover={{ y: -2, shadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
+            whileHover={{ y: -2, boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
             onClick={() => navigate(`/view/${file.id}`)}
             className="card-minimal p-4 flex items-center justify-between cursor-pointer group hover:border-[var(--accent)] transition-all"
           >

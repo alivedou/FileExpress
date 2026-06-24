@@ -13,6 +13,7 @@ import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import crypto from "crypto";
+import { execSync } from "child_process";
 
 // --- 环境变量配置 ---
 const APP_NAME = process.env.APP_NAME || "File Express";
@@ -88,6 +89,39 @@ function rateLimiter(req: express.Request, res: express.Response, next: express.
 setInterval(() => {
     rateLimitMap.clear();
 }, 24 * 60 * 60 * 1000);
+
+// --- 磁盘空间熔断 (Disk Space Guard) ---
+/**
+ * OS 级磁盘使用率检查中间件
+ * 当存储目录所在分区使用率超过阈值时，直接拒绝上传请求
+ * 与 checkStorageLimit() 互补：80% 硬拒收（保系统），90% 清过期文件（自救）
+ */
+const DISK_USAGE_THRESHOLD = 80; // 磁盘使用率百分比阈值
+
+function diskSpaceGuard(req: express.Request, res: express.Response, next: express.NextFunction) {
+    try {
+        const storagePath = path.resolve(LOCAL_STORAGE_DIR);
+        const output = execSync(`df "${storagePath}" --output=pcent | tail -1`, { encoding: "utf-8" });
+        const pct = parseInt(output.trim().replace("%", ""), 10);
+        
+        if (isNaN(pct)) {
+            console.warn("[磁盘检查] 无法解析 df 输出，放行:", output);
+            return next();
+        }
+        
+        if (pct > DISK_USAGE_THRESHOLD) {
+            console.warn(`[磁盘熔断] 使用率 ${pct}% > ${DISK_USAGE_THRESHOLD}%，拒绝上传`);
+            return res.status(503).json({ 
+                error: "DISK_SPACE_EXHAUSTED",
+                message: "服务器存储空间不足，暂停接收新文件，请稍后再试。"
+            });
+        }
+        next();
+    } catch (e) {
+        console.error("[磁盘检查] df 命令异常，放行:", e);
+        next();
+    }
+}
 
 const LOCAL_DB_PATH = path.join(process.cwd(), "local_db.json");
 const LOCAL_STORAGE_DIR = path.join(process.cwd(), "local_storage");
@@ -259,7 +293,7 @@ app.get("/api/config", (req, res) => {
  * 公开模式上传接口
  * 仅允许 .txt 文件，直接存入 JSON 数据库，不进行加密（因为是公开分享）
  */
-app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterError, fixUploadEncoding, async (req: Request, res: Response) => {
+app.post("/api/upload/public", rateLimiter, diskSpaceGuard, upload.single("file"), handleMulterError, fixUploadEncoding, async (req: Request, res: Response) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -340,7 +374,7 @@ app.post("/api/upload/public", rateLimiter, upload.single("file"), handleMulterE
  * 私密柜上传接口
  * 支持多格式，强制进行 AES 加密，元数据存 JSON，二进制存硬盘
  */
-app.post("/api/upload/private", rateLimiter, upload.array("files"), handleMulterError, fixUploadEncoding, async (req: Request, res: Response) => {
+app.post("/api/upload/private", rateLimiter, diskSpaceGuard, upload.array("files"), handleMulterError, fixUploadEncoding, async (req: Request, res: Response) => {
     try {
         if (!(await checkStorageLimit())) {
             return res.status(507).json({ error: "STORAGE_QUOTA_EXCEEDED" });
@@ -599,7 +633,7 @@ app.get("/api/view/:id", async (req, res) => {
 /**
  * 批量上传辅助接口：用于演示或其他便捷脚本调用
  */
-app.post("/api/batch-upload", upload.single("file"), fixUploadEncoding, async (req: Request, res: Response) => {
+app.post("/api/batch-upload", diskSpaceGuard, upload.single("file"), fixUploadEncoding, async (req: Request, res: Response) => {
     if (!req.file || !req.file.originalname.endsWith(".txt")) {
         return res.status(400).send("Error: 仅允许 .txt 文件。\n");
     }

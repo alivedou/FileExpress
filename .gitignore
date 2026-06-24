@@ -16,3 +16,5 @@ Thumbs.db
 *.swp
 *.swo
 tmp/
+local_db.json
+.external_ip
