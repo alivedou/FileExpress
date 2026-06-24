@@ -711,7 +711,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                   <FileText className="text-[var(--accent)]" size={16} /> 
                   <span className="text-[12px] font-medium truncate">{files[0].name}</span>
                 </div>
-                <button type="button" onClick={() => { setFiles([]); setError(""); }} className="text-[11px] font-bold text-red-500 hover:scale-105 transition-all">{t.remove}</button>
+                <button type="button" onClick={() => { setFiles([]); setError(""); (document.getElementById('pub-f') as HTMLInputElement).value = ''; }} className="text-[11px] font-bold text-red-500 hover:scale-105 transition-all">{t.remove}</button>
               </div>
             ) : (
               <textarea 
@@ -754,7 +754,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                   <div className="space-y-2 w-full px-2">
                     <p className="text-[11px] font-bold">{files.length} {t.readyFiles}</p>
                     <p className="text-[10px] text-[var(--text-secondary)] opacity-60 truncate max-w-[240px] sm:max-w-[300px]">{files.map(f => f.name).join(", ")}</p>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setFiles([]); setError(""); }} className="text-[10px] font-bold text-red-500 hover:scale-105 transition-all">{t.remove}</button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setFiles([]); setError(""); (document.getElementById('priv-f') as HTMLInputElement).value = ''; }} className="text-[10px] font-bold text-red-500 hover:scale-105 transition-all">{t.remove}</button>
                   </div>
                 ) : (
                   <div className="space-y-1">
