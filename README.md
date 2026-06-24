@@ -99,6 +99,41 @@ You can easily deploy File Express in various robust environments:
 - **VPS Server (Public Node)**: Ideal for a 24/7 public file hub. Utilize the "Background Running" option (Option 4) in the `FE` menu to smoothly daemonize the service on your cloud instance.
 - **Cloudflare Tunnel (Zero Trust)**: Highly recommended for exposing the service without opening firewall ports. Simply install `cloudflared` on your WSL or VPS and tunnel the local `http://localhost:<PORT>` securely to your custom domain.
 
+## Security & Protection 🛡️
+
+### Rate Limiting
+
+| Mechanism | Detail |
+|-----------|--------|
+| IP-based throttle | Max **20 uploads/IP/hour** across all 3 upload routes (`public`, `private`, `batch`) |
+| Map memory guard | **10,000 entry cap** + 5-min stale cleanup + 24h full reset |
+| Download dedup | **2s window** per IP per file to prevent mobile pre-fetch miscount |
+
+### Storage Safeguards
+
+| Mechanism | Detail |
+|-----------|--------|
+| Disk fuse | Rejects upload with **503** when partition usage exceeds **80%** |
+| Quota enforcement | Auto-purges expired files when total exceeds **90%** of `MAX_TOTAL_STORAGE_MB` |
+| File size bounds | Single file ≤10MB, ZIP ≤50MB (configurable via `.env`) |
+| TTL cache | Disk check & storage stats cached for **30s** to prevent repetitive I/O |
+
+### Data Security
+
+| Mechanism | Detail |
+|-----------|--------|
+| AES-256-GCM | Private files encrypted at rest, decrypted on extraction |
+| Burn-after-read | Files physically destroyed when download cap or expiry is reached |
+| XSS protection | React auto-escapes all user input |
+| Command injection | Zero `eval`/`exec`/shell paths for user-supplied content |
+
+### Input Validation
+
+| Mechanism | Detail |
+|-----------|--------|
+| Public mode | `.txt` only, enforced server-side + frontend `accept` attribute |
+| Private mode | Extension whitelist: images, docs, archives |
+
 ## FAQ / Troubleshooting
 
 **Q: Styles are missing or WebSocket errors in production?**  
