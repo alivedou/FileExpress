@@ -519,6 +519,10 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
   const maxSingle = config?.maxSingleFileMB || "5";
   const maxZip = config?.maxZipPayloadMB || "50";
 
+  useEffect(() => {
+    setError("");
+  }, [files]);
+
   // 成功后生成二维码：如果是公开内容生成链接码，私密内容生成包含提取参数的链接
   useEffect(() => {
     if (result) {
@@ -707,7 +711,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                   <FileText className="text-[var(--accent)]" size={16} /> 
                   <span className="text-[12px] font-medium truncate">{files[0].name}</span>
                 </div>
-                <button type="button" onClick={() => setFiles([])} className="text-[11px] font-bold text-red-500 hover:scale-105 transition-all">{t.remove}</button>
+                <button type="button" onClick={() => { setFiles([]); setError(""); }} className="text-[11px] font-bold text-red-500 hover:scale-105 transition-all">{t.remove}</button>
               </div>
             ) : (
               <textarea 
@@ -747,9 +751,10 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
               <FileUp className={`transition-all ${files.length > 0 ? "text-[var(--accent)] scale-110" : "opacity-20 group-hover:opacity-100 group-hover:text-[var(--accent)]"}`} size={24} />
               <div className="text-center px-4">
                 {files.length > 0 ? (
-                  <div className="space-y-1">
+                  <div className="space-y-2 w-full px-2">
                     <p className="text-[11px] font-bold">{files.length} {t.readyFiles}</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] opacity-60 truncate max-w-[120px] sm:max-w-[200px]">{files.map(f => f.name).join(", ")}</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] opacity-60 truncate max-w-[240px] sm:max-w-[300px]">{files.map(f => f.name).join(", ")}</p>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setFiles([]); setError(""); }} className="text-[10px] font-bold text-red-500 hover:scale-105 transition-all">{t.remove}</button>
                   </div>
                 ) : (
                   <div className="space-y-1">

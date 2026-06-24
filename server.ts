@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import crypto from "crypto";
 import { execSync } from "child_process";
+import { TTLCache } from "./lib/cache";
 
 // --- 环境变量配置 ---
 const APP_NAME = process.env.APP_NAME || "File Express";
@@ -85,10 +86,40 @@ function rateLimiter(req: express.Request, res: express.Response, next: express.
     next();
 }
 
-// 每 24 小时自动清空一次限流缓存，防止长时间运行导致内存溢出
+// 每 5 分钟清理过期限流条目，防止伪造 IP 导致内存溢出
+// Map 超过上限时全量清空；每 24 小时全量清空作为兜底
+const RATE_LIMIT_MAX_SIZE = 10000;
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of rateLimitMap) {
+        if (now - val.lastReset > RATE_LIMIT_WINDOW_MS) {
+            rateLimitMap.delete(key);
+        }
+    }
+    if (rateLimitMap.size > RATE_LIMIT_MAX_SIZE) {
+        console.warn(`[限流清理] Map 大小 ${rateLimitMap.size} 超过上限 ${RATE_LIMIT_MAX_SIZE}，全量清空`);
+        rateLimitMap.clear();
+    }
+}, 5 * 60 * 1000);
+
+// 兜底：每 24 小时整体重置
 setInterval(() => {
     rateLimitMap.clear();
 }, 24 * 60 * 60 * 1000);
+
+// --- 磁盘/存储缓存 (避免重复阻塞 IO) ---
+const diskCache = new TTLCache<number>(30 * 1000);
+const storageCache = new TTLCache<number>(30 * 1000);
+
+function getDiskUsagePercent(): number {
+    const cached = diskCache.get();
+    if (cached !== null) return cached;
+    const storagePath = path.resolve(LOCAL_STORAGE_DIR);
+    const output = execSync(`df "${storagePath}" --output=pcent | tail -1`, { encoding: "utf-8" });
+    const pct = parseInt(output.trim().replace("%", ""), 10);
+    diskCache.set(pct);
+    return pct;
+}
 
 // --- 磁盘空间熔断 (Disk Space Guard) ---
 /**
@@ -100,12 +131,10 @@ const DISK_USAGE_THRESHOLD = 80; // 磁盘使用率百分比阈值
 
 function diskSpaceGuard(req: express.Request, res: express.Response, next: express.NextFunction) {
     try {
-        const storagePath = path.resolve(LOCAL_STORAGE_DIR);
-        const output = execSync(`df "${storagePath}" --output=pcent | tail -1`, { encoding: "utf-8" });
-        const pct = parseInt(output.trim().replace("%", ""), 10);
+        const pct = getDiskUsagePercent();
         
         if (isNaN(pct)) {
-            console.warn("[磁盘检查] 无法解析 df 输出，放行:", output);
+            console.warn("[磁盘检查] 无法解析 df 输出，放行:", pct);
             return next();
         }
         
@@ -234,6 +263,11 @@ app.get("/api/health", (req, res) => {
  * 检查当前服务器占用总容量，如果接近阈值则触发过期文件清理
  */
 async function checkStorageLimit(): Promise<boolean> {
+    const cached = storageCache.get();
+    if (cached !== null && cached < MAX_TOTAL_STORAGE_MB * 0.9) {
+        return true;
+    }
+    
     const local = loadLocalDb();
     let totalSize = 0;
     // 1. 计算内存中元数据的占用 (主要是文本内容)
@@ -255,6 +289,7 @@ async function checkStorageLimit(): Promise<boolean> {
     }
 
     const usageMb = totalSize / (1024 * 1024);
+    storageCache.set(usageMb);
     
     // 如果占用超过总限额的 90%，触发积极清理
     if (usageMb > MAX_TOTAL_STORAGE_MB * 0.9) {
@@ -358,6 +393,7 @@ app.post("/api/upload/public", rateLimiter, diskSpaceGuard, upload.single("file"
         
         local.files[id] = fileRecord;
         saveLocalDb(local);
+        storageCache.invalidate();
         
         res.json({
             success: true,
@@ -477,6 +513,7 @@ app.post("/api/upload/private", rateLimiter, diskSpaceGuard, upload.array("files
 
         local.files[id] = fileRecord;
         saveLocalDb(local);
+        storageCache.invalidate();
 
         res.json({
             success: true,
@@ -518,6 +555,7 @@ app.post("/api/extract", async (req, res) => {
             delete local.files[f.id];
         }
         saveLocalDb(local);
+        storageCache.invalidate();
 
         if (!record) return res.status(404).json({ error: "提取码无效或文件已销毁" });
 
@@ -536,7 +574,7 @@ app.post("/api/extract", async (req, res) => {
 
 // --- 移动端防刷/双击/Range请求并发去重缓存 ---
 const recentDownloads = new Map<string, number>();
-const DEDUPLICATE_WINDOW_MS = 6000; // 6秒内同IP对同文件的下载只计一次
+const DEDUPLICATE_WINDOW_MS = 2000; // 2秒内同IP对同文件的下载只计一次
 
 /**
  * 直接下载接口 (GET)
@@ -664,6 +702,7 @@ app.post("/api/batch-upload", diskSpaceGuard, upload.single("file"), fixUploadEn
         }
         local.files[id] = fileRecord;
         saveLocalDb(local);
+        storageCache.invalidate();
 
         res.send(`上传成功。 访问链接: ${process.env.APP_URL || "http://localhost:3000"}/view/${id}\n`);
     } catch (err: any) {
