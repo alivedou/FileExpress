@@ -1,0 +1,3 @@
+replicaCount: 3
+autoscaling: { minReplicas: 3, maxReplicas: 50 }
+persistence: { size: 500Gi }

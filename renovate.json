@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", "group:allNonMajor"],
+  "schedule": ["before 6am on Monday"],
+  "packageRules": [
+    { "matchUpdateTypes": ["patch"], "automerge": true, "automergeType": "pr", "requiredStatusChecks": ["verify"] },
+    { "matchDepTypes": ["devDependencies"], "groupName": "test and build tooling" },
+    { "matchPackagePatterns": ["^@aws-sdk/", "^@azure/"], "groupName": "storage SDKs" }
+  ],
+  "vulnerabilityAlerts": { "enabled": true },
+  "lockFileMaintenance": { "enabled": true }
+}

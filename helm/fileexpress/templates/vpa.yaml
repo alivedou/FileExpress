@@ -1,0 +1,9 @@
+{{- if .Values.verticalAutoscaling.enabled }}
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata: { name: fileexpress }
+spec:
+  targetRef: { apiVersion: apps/v1, kind: Deployment, name: fileexpress }
+  updatePolicy: { updateMode: Auto }
+  resourcePolicy: { containerPolicies: [{ containerName: fileexpress, controlledResources: [cpu, memory], maxAllowed: { cpu: "4", memory: 4Gi } }] }
+{{- end }}

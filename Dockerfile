@@ -14,7 +14,7 @@ RUN apk add --no-cache libc6-compat
 COPY package*.json ./
 
 # 安装完整依赖 (包含 devDependencies 用于前端打包和 server 编译)
-RUN npm ci
+RUN npm install
 
 # 复制项目所有文件
 COPY . .
@@ -44,7 +44,7 @@ RUN mkdir -p /app/local_storage && \
 COPY --chown=node:node package*.json ./
 
 # 仅安装生产运行依赖，大幅精简体积
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # 复制打包后的编译资源 dist 整个目录
 COPY --from=builder --chown=node:node /app/dist ./dist

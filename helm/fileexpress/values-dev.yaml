@@ -1,0 +1,4 @@
+replicaCount: 1
+persistence: { size: 10Gi }
+autoscaling: { enabled: false }
+verticalAutoscaling: { enabled: false }

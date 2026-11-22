@@ -1,0 +1,31 @@
+name: cd
+on: { workflow_dispatch: { inputs: { environment: { type: choice, options: [dev, staging, prod], required: true }, version: { required: true, type: string } } } }
+permissions: { contents: read, id-token: write }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - uses: azure/setup-helm@v4
+      - name: Configure cluster credentials
+        run: echo "${{ secrets.KUBECONFIG }}" >"$HOME/.kube/config" && chmod 600 "$HOME/.kube/config"
+      - uses: sigstore/cosign-installer@v3
+      - run: cosign verify --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@.*" --certificate-oidc-issuer https://token.actions.githubusercontent.com ghcr.io/${{ github.repository }}:${{ inputs.version }}
+      - run: helm upgrade --install fileexpress-${{ inputs.environment }} helm/fileexpress --namespace fileexpress-${{ inputs.environment }} --create-namespace --set image.tag=${{ inputs.version }} --values helm/fileexpress/values-${{ inputs.environment }}.yaml --wait --timeout 10m
+      - if: inputs.environment == 'prod'
+        run: bash scripts/canary.sh fileexpress-prod fileexpress-prod 10 50 100
+      - name: Smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl --namespace fileexpress-${{ inputs.environment }} rollout status deploy/fileexpress --timeout=5m
+          kubectl --namespace fileexpress-${{ inputs.environment }} port-forward svc/fileexpress 8080:80 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          sleep 3
+          curl --fail --retry 10 --retry-delay 2 http://localhost:8080/health/ready
+      - name: Automatic rollback
+        if: failure()
+        run: helm rollback fileexpress-${{ inputs.environment }} --namespace fileexpress-${{ inputs.environment }} --wait --timeout 5m

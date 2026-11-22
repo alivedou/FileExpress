@@ -1,0 +1,15 @@
+replicaCount: 2
+image: { repository: ghcr.io/alivedou/fileexpress, tag: latest, pullPolicy: IfNotPresent }
+imagePullSecrets: []
+service: { type: ClusterIP, port: 80, targetPort: 3000 }
+config: { STORAGE_BACKEND: local, STORAGE_BACKENDS: local, MAX_CHUNK_SIZE_MB: "8", MAX_CONCURRENT_CHUNKS: "3", UPLOAD_EXPIRY_HOURS: "24", OTEL_SERVICE_NAME: fileexpress }
+secrets: { existingSecret: "", STORAGE_ENCRYPTION_KEY: "", WEBHOOK_SIGNING_SECRET: "", ADMIN_API_TOKEN: "" }
+persistence: { enabled: true, storageClass: "", size: 100Gi }
+resources: { requests: { cpu: 250m, memory: 512Mi }, limits: { cpu: "2", memory: 2Gi } }
+autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 20, targetCPUUtilizationPercentage: 70 }
+verticalAutoscaling: { enabled: true }
+podMonitor: { enabled: true, interval: 15s }
+networkPolicy: { enabled: true, monitoringNamespace: monitoring }
+nodeSelector: {}
+tolerations: []
+affinity: {}

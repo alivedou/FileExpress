@@ -1,0 +1,7 @@
+apiVersion: v2
+name: fileexpress
+description: Enterprise multi-tenant file transfer platform
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+kubeVersion: ">=1.29.0-0"

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: fileexpress, labels: {{- include "fileexpress.labels" . | nindent 4 }} }
+data:
+  DATA_DIR: /data
+  PORT: "3000"
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
