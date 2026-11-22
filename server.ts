@@ -13,7 +13,7 @@ import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import crypto from "crypto";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { TTLCache } from "./lib/cache";
 import { createEnterpriseRouter } from "./src/api/enterprise";
 import { startObservability } from "./src/observability/bootstrap";
@@ -163,8 +163,12 @@ function getDiskUsagePercent(): number {
   const cached = diskCache.get();
   if (cached !== null) return cached;
   const storagePath = path.resolve(LOCAL_STORAGE_DIR);
-  const output = execSync(`df "${storagePath}" --output=pcent | tail -1`, { encoding: "utf-8" });
-  const pct = parseInt(output.trim().replace("%", ""), 10);
+  // 使用 POSIX 标准输出 (-P)，GNU coreutils 与 Alpine 的 BusyBox 都支持；
+  // 不要用 --output=pcent，BusyBox 的 df 没有该参数，会导致熔断静默失效。
+  const output = execFileSync("df", ["-P", storagePath], { encoding: "utf-8" });
+  const lastLine = output.trim().split("\n").pop() ?? "";
+  const pct = Number.parseInt(lastLine.split(/\s+/)[4]?.replace("%", "") ?? "", 10);
+  if (!Number.isFinite(pct)) throw new Error(`无法解析 df 输出: ${lastLine}`);
   diskCache.set(pct);
   return pct;
 }
