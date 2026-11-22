@@ -1,0 +1,15 @@
+# 快速开始 / Quick start
+
+## 中文
+
+复制 `.env.example` 为受 Secret 管理的环境配置，执行 `npm ci && npm run dev`。小文件沿用原接口；超过 100 MiB 的文件使用 `/api/upload/chunks` 或 Tus 1.0.0。 readiness 位于 `/health/ready`。
+
+## English
+
+Inject values from `.env.example` through your secret manager and run `npm ci && npm run dev`. Files over 100 MiB use `/api/upload/chunks` or Tus 1.0.0. Readiness is available at `/health/ready`.
+
+```bash
+curl -X POST http://localhost:3000/api/upload/chunks \
+  -H 'Content-Type: application/json' \
+  -d '{"fileName":"video.mp4","totalSize":524288000,"chunkSize":8388608}'
+```

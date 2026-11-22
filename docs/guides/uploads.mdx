@@ -1,0 +1,5 @@
+# 大文件续传 / Resumable uploads
+
+Tus 客户端必须发送 `Tus-Resumable: 1.0.0`，PATCH 使用 `application/offset+octet-stream` 并从 HEAD 返回的偏移继续。自研分片接口允许并发上传、逐块 SHA-256 校验、幂等重试与过期清理。
+
+For custom chunks, create a session, query received chunks after a network failure, upload only missing chunks, then call `/complete`. `MAX_CHUNK_SIZE_MB`, `MAX_CONCURRENT_CHUNKS` and `UPLOAD_EXPIRY_HOURS` bound resource usage. Pause stops scheduling new chunks; it does not discard already accepted chunks.

@@ -1,0 +1,19 @@
+{
+  "admin.title": "企业管理控制台",
+  "admin.storage": "存储",
+  "admin.security": "安全",
+  "admin.drm": "DRM",
+  "admin.webhooks": "Webhook",
+  "admin.teams": "团队",
+  "admin.roles": "角色",
+  "admin.audit": "审计",
+  "admin.monitoring": "监控",
+  "admin.testConnection": "测试连接",
+  "admin.save": "保存配置",
+  "admin.export": "导出审计日志",
+  "upload.largeMode": "大文件模式",
+  "upload.start": "开始续传",
+  "upload.pause": "暂停",
+  "upload.continue": "继续",
+  "upload.retry": "自动重试已启用"
+}

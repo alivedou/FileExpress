@@ -1,0 +1,5 @@
+# 可观测性与运维 / Observability and operations
+
+Prometheus 抓取 `/metrics`，Kubernetes 使用 `/health/live` 与 `/health/ready`。默认告警包括磁盘、扫描积压、错误率、P99 延迟和后端不可用。Trace 导出器可接 OpenTelemetry Collector，再转发 Jaeger/Tempo；结构化日志可接 Loki。
+
+Use `make migrate seed benchmark docs` for local operations. Helm values provide HPA, VPA, PodMonitor and NetworkPolicy. ArgoCD ApplicationSets manage dev/staging/prod. Canary analysis requires real Prometheus and ingress metrics; never mark a rollout healthy from static manifests alone.

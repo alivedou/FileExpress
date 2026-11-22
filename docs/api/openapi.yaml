@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: FileExpress Enterprise API
+  version: 2.0.0
+paths:
+  /api/upload/tus:
+    post:
+      summary: Create a Tus 1.0.0 resumable upload
+      parameters:
+        - name: Tus-Resumable
+          in: header
+          required: true
+          schema: { type: string, enum: [1.0.0] }
+        - name: Upload-Length
+          in: header
+          required: true
+          schema: { type: integer, minimum: 0, example: 524288000 }
+      responses:
+        '201': { description: Upload created, headers: { Location: { schema: { type: string, example: /api/upload/tus/7d5f } } } }
+        '400': { description: Invalid upload metadata }
+  /api/upload/tus/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    head:
+      summary: Read the resumable offset
+      responses: { '200': { description: Current offset } }
+    patch:
+      summary: Append binary content
+      requestBody: { required: true, content: { application/offset+octet-stream: { schema: { type: string, format: binary } } } }
+      responses: { '204': { description: Bytes appended }, '409': { description: Offset mismatch } }
+  /api/upload/chunks:
+    post:
+      summary: Create a chunked upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUpload' }
+            example: { fileName: video.mp4, mimeType: video/mp4, totalSize: 524288000, chunkSize: 8388608 }
+      responses: { '201': { description: Upload created } }
+  /api/upload/chunks/{id}/{index}:
+    put:
+      summary: Upload one verified chunk
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: index, in: path, required: true, schema: { type: integer, minimum: 0 } }
+        - { name: X-Chunk-SHA256, in: header, required: true, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
+      responses: { '200': { description: Chunk stored }, '422': { description: Checksum mismatch } }
+  /api/upload/chunks/{id}/complete:
+    post:
+      summary: Merge chunks in sequence
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Upload completed, content: { application/json: { example: { uploadId: 7d5f, size: 524288000, checksum: abc123, pickupCode: A1B2C3 } } } } }
+  /health/ready:
+    get:
+      summary: Storage-aware readiness probe
+      responses: { '200': { description: All backends healthy }, '503': { description: Backend unavailable } }
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses: { '200': { description: Prometheus text format } }
+components:
+  schemas:
+    CreateUpload:
+      type: object
+      required: [fileName, totalSize]
+      properties:
+        fileName: { type: string }
+        mimeType: { type: string, default: application/octet-stream }
+        totalSize: { type: integer, minimum: 0 }
+        chunkSize: { type: integer, minimum: 1, default: 8388608 }

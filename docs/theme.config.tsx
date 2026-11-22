@@ -1,0 +1,1 @@
+export default { logo: <strong>FileExpress</strong>, project: { link: "https://github.com/alivedou/FileExpress" }, i18n: [{ locale: "zh", text: "简体中文" }, { locale: "en", text: "English" }], footer: { text: "FileExpress Enterprise Documentation" } };

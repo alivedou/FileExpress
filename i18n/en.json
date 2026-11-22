@@ -1,0 +1,19 @@
+{
+  "admin.title": "Enterprise administration",
+  "admin.storage": "Storage",
+  "admin.security": "Security",
+  "admin.drm": "DRM",
+  "admin.webhooks": "Webhooks",
+  "admin.teams": "Teams",
+  "admin.roles": "Roles",
+  "admin.audit": "Audit",
+  "admin.monitoring": "Monitoring",
+  "admin.testConnection": "Test connection",
+  "admin.save": "Save configuration",
+  "admin.export": "Export audit log",
+  "upload.largeMode": "Large file mode",
+  "upload.start": "Start resumable upload",
+  "upload.pause": "Pause",
+  "upload.continue": "Continue",
+  "upload.retry": "Automatic retry enabled"
+}

@@ -1,0 +1,7 @@
+# 存储后端 / Storage backends
+
+统一 `StorageBackend` 支持 local、S3、Azure Blob、数据库 BLOB 和 IPFS。云适配器通过 `StorageAdapters` 注入，注册表按 MIME/大小路由，并在每次失败时创建新流执行故障转移。
+
+Set `STORAGE_BACKEND` and comma-separated `STORAGE_BACKENDS`. Credentials belong in Kubernetes or CI secrets. S3 multipart parts are at least 5 MiB; failed transfers are aborted. Azure supports block blobs, immutable policies and CDN URL replacement. Database uploads use one transaction. IPFS uses content identifiers and pin metadata.
+
+迁移使用 `StorageMigrator`，先校验 SHA-256，再可选删除源对象；不要在校验失败时删除源数据。

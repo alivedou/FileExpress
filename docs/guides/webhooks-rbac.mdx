@@ -1,0 +1,5 @@
+# Webhook、团队与审计 / Webhooks, teams and audit
+
+Webhook 使用 `timestamp.payload` 的 HMAC-SHA256、`Idempotency-Key`、指数退避和死信重发。接收方应检查五分钟时间窗并持久化幂等键。
+
+RBAC permissions are scoped by tenant, project, bucket and time window. API keys are stored as SHA-256 hashes and have per-minute limits. Audit records form an HMAC hash chain; JSONL and CEF exports support SIEM ingestion. Export archives before applying offline retention. Built-in forwarders cover Slack, Discord, 飞书, 钉钉, 企业微信, Telegram, email, PagerDuty and Opsgenie.
