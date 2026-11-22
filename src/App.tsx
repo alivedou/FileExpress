@@ -12,6 +12,8 @@ import {
   Copy, ExternalLink, QrCode
 } from "lucide-react";
 import QRCode from "qrcode";
+import AdminApp from "./admin/AdminApp";
+import { LargeFileUpload } from "./upload/LargeFileUpload";
 
 // --- 多语言翻译数据 ---
 const translations = {
@@ -189,6 +191,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<MainLayout t={t} lang={lang} config={config} />} />
             <Route path="/view/:id" element={<ViewPage t={t} />} />
+            <Route path="/admin/*" element={<AdminApp lang={lang} />} />
           </Routes>
         </div>
         
@@ -518,6 +521,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
 
   const maxSingle = config?.maxSingleFileMB || "5";
   const maxZip = config?.maxZipPayloadMB || "50";
+  const largeFile = type === "private" && files.length === 1 && (files[0]?.size ?? 0) > 100 * 1024 * 1024 ? files[0] : undefined;
 
   useEffect(() => {
     setError("");
@@ -549,6 +553,10 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
     setLoading(true);
     setError("");
     try {
+      if (largeFile) {
+        setError("请使用大文件模式完成断点续传");
+        return;
+      }
       const fd = new FormData();
       if (type === 'public') {
         // 公开分享：支持文本粘贴或选择单个文本文件
@@ -779,9 +787,21 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                   }
                 }} 
               />
-           </div>
+            </div>
 
-           {/* 时间与次数并排输入框 */}
+            {largeFile && (
+              <LargeFileUpload
+                file={largeFile}
+                locale={document.documentElement.lang === "en" ? "en" : "zh"}
+                onComplete={(upload) => {
+                  setResult({ ...upload, success: true, expiresAt: upload.expiresAt ?? new Date(Date.now() + Number(duration) * 3600_000).toISOString() });
+                  setShowQr(true);
+                  onSuccess();
+                }}
+              />
+            )}
+
+            {/* 时间与次数并排输入框 */}
            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <p className="text-[12px] font-bold text-[var(--text-secondary)]">{t.durationLabel} (h)</p>
@@ -812,7 +832,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
 
       {/* 提交按钮：处理中会显示 Loading 动画 */}
       <button 
-        disabled={loading || (type === 'public' ? (!content && !files.length) : !files.length)}
+        disabled={loading || Boolean(largeFile) || (type === 'public' ? (!content && !files.length) : !files.length)}
         className="w-full h-12 sm:h-14 bg-[var(--accent)] text-white shadow-md hover:shadow-lg rounded-lg text-[14px] font-bold disabled:opacity-50 transition-all flex items-center justify-center gap-2 active:scale-95"
       >
         {loading ? (

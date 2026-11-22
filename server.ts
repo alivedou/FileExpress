@@ -15,6 +15,10 @@ import fs from "fs";
 import crypto from "crypto";
 import { execSync } from "child_process";
 import { TTLCache } from "./lib/cache";
+import { createEnterpriseRouter } from "./src/api/enterprise";
+import { startObservability } from "./src/observability/bootstrap";
+
+startObservability();
 
 // --- 环境变量配置 ---
 const APP_NAME = process.env.APP_NAME || "File Express";
@@ -203,8 +207,9 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
+app.use(createEnterpriseRouter(DATA_DIR));
 
-// 使用 Multer 处理文件上传，将其缓存在内存中以便直接加密
+// 旧版小文件接口仍使用 Multer；大文件通过 /api/upload/tus 与 /api/upload/chunks 流式续传。
 const upload = multer({ 
     storage: multer.memoryStorage(),
     limits: {
