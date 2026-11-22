@@ -18,3 +18,11 @@ Thumbs.db
 tmp/
 local_db.json
 .external_ip
+.codeartsdoer/
+.resultverify/
+/node_modules
+/EXTENSION_TASK.md
+.playwright/
+test-results/
+*.pem
+*.key
