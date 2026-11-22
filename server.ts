@@ -20,6 +20,20 @@ import { startObservability } from "./src/observability/bootstrap";
 
 startObservability();
 
+interface BaseFileRecord {
+    id: string;
+    fileName: string;
+    mimeType: string;
+    expiryDate: string;
+    downloadCount: number;
+    createdAt: string;
+    isLocalBinary?: boolean;
+}
+interface PublicFileRecord extends BaseFileRecord { type: "public"; content: string }
+interface PrivateFileRecord extends BaseFileRecord { type: "private"; pickupCode: string; maxDownloads: number; fileSize: number }
+type LocalFileRecord = PublicFileRecord | PrivateFileRecord;
+interface LocalDb { files: Record<string, LocalFileRecord> }
+
 // --- 环境变量配置 ---
 const APP_NAME = process.env.APP_NAME || "File Express";
 const APP_SUBTITLE = process.env.APP_SUBTITLE || "极简、安全、临时的文件传输中心";
@@ -166,16 +180,16 @@ if (!fs.existsSync(LOCAL_STORAGE_DIR)) {
 }
 
 // 加载元数据数据库
-function loadLocalDb() {
+function loadLocalDb(): LocalDb {
     if (fs.existsSync(LOCAL_DB_PATH)) {
         try {
-            return JSON.parse(fs.readFileSync(LOCAL_DB_PATH, "utf-8"));
+            return JSON.parse(fs.readFileSync(LOCAL_DB_PATH, "utf-8")) as LocalDb;
         } catch { return { files: {} }; }
     }
     return { files: {} };
 }
 // 写入元数据数据库
-function saveLocalDb(data: any) { fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2)); }
+function saveLocalDb(data: LocalDb) { fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2)); }
 
 // 存储二进制文件到物理目录
 function saveLocalFile(id: string, buffer: Buffer): string {
@@ -218,7 +232,7 @@ const upload = multer({
 });
 
 // Multer 错误处理中间件
-function handleMulterError(err: any, req: express.Request, res: express.Response, next: express.NextFunction) {
+function handleMulterError(err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) {
     if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
             return res.status(413).json({ error: `文件体积超出服务器限制 (${MAX_ZIP_PAYLOAD_SIZE_MB}MB)` });
@@ -243,7 +257,7 @@ function fixEncoding(name: string): string {
 }
 
 // 中间件：自动修复 req.file / req.files 中的文件名编码
-function fixUploadEncoding(req: any, _res: express.Response, next: express.NextFunction) {
+function fixUploadEncoding(req: express.Request, _res: express.Response, next: express.NextFunction) {
     if (req.file) req.file.originalname = fixEncoding(req.file.originalname);
     if (req.files) {
         (req.files as Express.Multer.File[]).forEach(f => {
@@ -277,7 +291,7 @@ async function checkStorageLimit(): Promise<boolean> {
     const local = loadLocalDb();
     let totalSize = 0;
     // 1. 计算内存中元数据的占用 (主要是文本内容)
-    Object.values(local.files).forEach((f: any) => {
+    Object.values(local.files).forEach((f) => {
         if (f.type === "public" && f.content) {
             totalSize += Buffer.from(f.content).length;
         }
@@ -377,7 +391,7 @@ app.post("/api/upload/public", rateLimiter, diskSpaceGuard, upload.single("file"
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 3);
 
-        const fileRecord: any = {
+        const fileRecord: PublicFileRecord = {
             id,
             type: "public",
             fileName,
@@ -407,8 +421,8 @@ app.post("/api/upload/public", rateLimiter, diskSpaceGuard, upload.single("file"
             url: `/view/${id}`,
             expiresAt: fileRecord.expiryDate
         });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
+    } catch (error) {
+        res.status(500).json({ error: errorMessage(error) });
     }
 });
 
@@ -435,7 +449,7 @@ app.post("/api/upload/private", rateLimiter, diskSpaceGuard, upload.array("files
         // 尝试生成不重复的验证码
         while (!isUnique && attempts < 10) {
             pickupCode = Math.floor(100000 + Math.random() * 900000).toString();
-            const existing = Object.values(local.files).find((f: any) => f.type === "private" && f.pickupCode === pickupCode);
+            const existing = Object.values(local.files).find((f) => f.type === "private" && f.pickupCode === pickupCode);
             if (!existing) isUnique = true;
             else attempts++;
         }
@@ -500,7 +514,7 @@ app.post("/api/upload/private", rateLimiter, diskSpaceGuard, upload.array("files
         const expiryDate = new Date();
         expiryDate.setHours(expiryDate.getHours() + durationHours);
 
-        const fileRecord: any = {
+        const fileRecord: PrivateFileRecord = {
             id,
             type: "private",
             fileName: finalFileName,
@@ -526,9 +540,9 @@ app.post("/api/upload/private", rateLimiter, diskSpaceGuard, upload.array("files
             pickupCode,
             expiresAt: fileRecord.expiryDate
         });
-    } catch (error: any) {
+    } catch (error) {
         console.error("[私密上传] 错误:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: errorMessage(error) });
     }
 });
 
@@ -549,7 +563,7 @@ app.post("/api/extract", async (req, res) => {
             .filter(f => f.type === "private" && f.pickupCode === code)
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         
-        let record: any = null;
+        let record: PrivateFileRecord | null = null;
         for (const f of matches) {
             // 检查有效期和剩余次数
             if (new Date(f.expiryDate) > now && f.downloadCount < f.maxDownloads) {
@@ -573,8 +587,8 @@ app.post("/api/extract", async (req, res) => {
             mimeType: record.mimeType,
             downloadUrl: `/api/download/${record.pickupCode}` // 提供直接下载路径
         });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
+    } catch (error) {
+        res.status(500).json({ error: errorMessage(error) });
     }
 });
 
@@ -592,9 +606,9 @@ app.get("/api/download/:code", async (req, res) => {
         const now = new Date();
         const local = loadLocalDb();
         
-        const record = Object.values(local.files).find((f: any) => f.type === "private" && f.pickupCode === code) as any;
+        const record = Object.values(local.files).find((f) => f.type === "private" && f.pickupCode === code);
         
-        if (!record || new Date(record.expiryDate) < now || record.downloadCount >= record.maxDownloads) {
+        if (!record || record.type !== "private" || new Date(record.expiryDate) < now || record.downloadCount >= record.maxDownloads) {
              return res.status(404).send("文件已过期或不存在");
         }
 
@@ -669,8 +683,8 @@ app.get("/api/view/:id", async (req, res) => {
         }
 
         res.json({ content: data.content, fileName: data.fileName, createdAt: data.createdAt });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
+    } catch (error) {
+        res.status(500).json({ error: errorMessage(error) });
     }
 });
 
@@ -691,7 +705,7 @@ app.post("/api/batch-upload", rateLimiter, diskSpaceGuard, upload.single("file")
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 3);
 
-        const fileRecord: any = {
+        const fileRecord: PublicFileRecord = {
             id,
             type: "public",
             fileName: title,
@@ -711,8 +725,8 @@ app.post("/api/batch-upload", rateLimiter, diskSpaceGuard, upload.single("file")
         storageCache.invalidate();
 
         res.send(`上传成功。 访问链接: ${process.env.APP_URL || "http://localhost:3000"}/view/${id}\n`);
-    } catch (err: any) {
-        res.status(500).send(`Error: ${err.message}\n`);
+    } catch (err) {
+        res.status(500).send(`Error: ${errorMessage(err)}\n`);
     }
 });
 
@@ -723,7 +737,7 @@ app.get("/api/files/public", async (req, res) => {
     try {
         const now = new Date().toISOString();
         const local = loadLocalDb();
-        const files: any[] = Object.values(local.files).filter((f: any) => f.type === "public");
+        const files: PublicFileRecord[] = Object.values(local.files).filter((f): f is PublicFileRecord => f.type === "public");
 
         const filtered = files
             .filter(f => f.expiryDate > now)
@@ -731,7 +745,7 @@ app.get("/api/files/public", async (req, res) => {
             .map(f => ({ id: f.id, fileName: f.fileName, createdAt: f.createdAt, expiryDate: f.expiryDate }));
 
         res.json(filtered.slice(0, 50));
-    } catch (error: any) {
+    } catch (error) {
         res.json([]); 
     }
 });
@@ -781,5 +795,9 @@ async function startServer() {
     });
 }
 
-startServer();
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : "Unknown server error";
+}
+
+void startServer();
 

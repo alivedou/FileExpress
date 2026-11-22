@@ -2,7 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "coverage/**", "node_modules/**", "docs/.next/**", "helm/**", "test-results/**"] },
+  { ignores: ["dist/**", "coverage/**", "node_modules/**", "docs/**", "helm/**", "test-results/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -19,6 +19,10 @@ export default tseslint.config(
       "@typescript-eslint/no-misused-promises": "off",
       "@typescript-eslint/require-await": "off"
     }
+  },
+  {
+    files: ["test/**/*.ts"],
+    rules: { "@typescript-eslint/unbound-method": "off" }
   },
   {
     files: ["**/*.js", "**/*.cjs", "**/*.mjs"],

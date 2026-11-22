@@ -120,6 +120,12 @@ const translations = {
 
 type Language = "zh" | "en";
 type StorageType = "public" | "private";
+type Translation = (typeof translations)["zh"];
+interface AppConfig { appName: string; appSubtitle: string; maxSingleFileMB: number; maxZipPayloadMB: number; maxStorageHours: number; maxDownloads: number; encryptionStatus: boolean }
+interface PublicFileSummary { id: string; fileName: string; createdAt: string; expiryDate: string }
+interface UploadResult { success?: boolean; id?: string; uploadId?: string; checksum?: string; size?: number; url?: string; pickupCode?: string; expiresAt?: string; error?: string }
+interface PublicViewData { content: string; fileName: string; createdAt: string }
+interface ExtractResponse { success?: boolean; fileName?: string; mimeType?: string; downloadUrl?: string; data?: string; id?: string; error?: string }
 
 export default function App() {
   // 全局语言状态
@@ -127,7 +133,7 @@ export default function App() {
   // 深色模式状态
   const [isDark, setIsDark] = useState(false);
   // 从后端获取的应用标题等动态配置
-  const [config, setConfig] = useState<any>(null);
+  const [config, setConfig] = useState<AppConfig | null>(null);
 
   // 主题切换辅助逻辑
   useEffect(() => {
@@ -141,7 +147,7 @@ export default function App() {
   // 初始化获取应用名称和副标题
   useEffect(() => {
     fetch("/api/config")
-      .then(res => res.json())
+      .then(res => res.json() as Promise<AppConfig>)
       .then(data => {
         setConfig(data);
         if (data.appName) {
@@ -250,7 +256,7 @@ function SegmentedControl<T extends string>({
 /**
  * 首页主布局：包含控制台和公开广场
  */
-function MainLayout({ t, lang, config }: { t: any, lang: Language, config: any }) {
+function MainLayout({ t, lang, config }: { t: Translation, lang: Language, config: AppConfig | null }) {
   const [mode, setMode] = useState<"upload" | "pickup">("upload");
   const [storageType, setStorageType] = useState<StorageType>("public");
   const [showNotice, setShowNotice] = useState(false);
@@ -332,7 +338,7 @@ Author: adou${t.disclaimerFull}`;
                 { label: t.extract, value: "pickup" }
               ]}
               value={mode}
-              onChange={(v) => setMode(v as any)}
+              onChange={(v: "upload" | "pickup") => setMode(v)}
             />
 
             <AnimatePresence mode="wait">
@@ -348,7 +354,7 @@ Author: adou${t.disclaimerFull}`;
                       { label: t.private, value: "private" }
                     ]}
                     value={storageType}
-                    onChange={(v) => setStorageType(v as any)}
+                    onChange={(v: StorageType) => setStorageType(v)}
                     className="border-none !p-0"
                   />
                   
@@ -437,15 +443,15 @@ Author: adou${t.disclaimerFull}`;
 /**
  * 公开列表展示组件
  */
-function PublicSquare({ t, refreshKey }: { t: any, refreshKey: number }) {
-  const [files, setFiles] = useState<any[]>([]);
+function PublicSquare({ t, refreshKey }: { t: Translation, refreshKey: number }) {
+  const [files, setFiles] = useState<PublicFileSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     setLoading(true);
     fetch("/api/files/public")
-      .then(res => res.json())
+      .then(res => res.json() as Promise<PublicFileSummary[]>)
       .then(data => {
         setFiles(Array.isArray(data) ? data : []);
         setLoading(false);
@@ -506,7 +512,7 @@ function PublicSquare({ t, refreshKey }: { t: any, refreshKey: number }) {
 /**
  * 文件存放表单逻辑
  */
-function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: StorageType, setType: (v: StorageType) => void, onSuccess: () => void, config: any }) {
+function UploadForm({ t, type, setType, onSuccess, config }: { t: Translation, type: StorageType, setType: (v: StorageType) => void, onSuccess: () => void, config: AppConfig | null }) {
   const [files, setFiles] = useState<File[]>([]); // 物理文件数组
   const [title, setTitle] = useState(""); // 公开分享标题
   const [content, setContent] = useState(""); // 公开分享文本内容
@@ -514,7 +520,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
   const [downloads, setDownloads] = useState("5"); // 最大下载次数
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<any>(null); // 上传成功结果存储（包含 ID 或 提取码）
+  const [result, setResult] = useState<UploadResult | null>(null); // 上传成功结果存储（包含 ID 或 提取码）
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>(""); // 生成的二维码图片数据
   const [showQr, setShowQr] = useState(false);
@@ -531,7 +537,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
   useEffect(() => {
     if (result) {
       const url = type === 'public' 
-        ? `${window.location.origin}${result.url}`
+        ? `${window.location.origin}${result.url ?? ""}`
         : `${window.location.origin}/?pickup=${result.pickupCode}`;
       
       // 使用极速识别配色：高对比度深色 (Slate 900) 配合不透明纯白背景 (#ffffff)，并且提供 2 格标准安全留白
@@ -590,7 +596,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
         fd.append('maxDownloads', downloads);
       }
       const res = await fetch(`/api/upload/${type}`, { method: 'POST', body: fd });
-      const data = await res.json();
+      const data = await res.json() as UploadResult;
       if (data.success) {
         setResult(data);
         setShowQr(true); // 默认展示二维码，方便扫码
@@ -632,7 +638,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                </h4>
             </div>
             <div className="text-[9px] sm:text-[10px] text-[var(--text-secondary)] font-bold opacity-60 font-mono ml-[40px] sm:ml-[52px]">
-               EXP: {new Date(result.expiresAt).toLocaleString()}
+               EXP: {result.expiresAt ? new Date(result.expiresAt).toLocaleString() : "unknown"}
             </div>
           </div>
           
@@ -650,10 +656,10 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
             <div className="card-minimal p-4 border-[var(--border-color)] bg-[var(--bg-primary)]">
                <p className="text-[11px] font-bold mb-2 text-left text-[var(--text-secondary)] opacity-60 uppercase">{t.accessUrl}</p>
                <div 
-                 onClick={() => window.open(result.url, '_blank')}
+                 onClick={() => window.open(result.url ?? "/", '_blank')}
                  className="group flex flex-col sm:flex-row items-center justify-between p-3 border border-[var(--border-color)] bg-[var(--bg-secondary)] rounded-lg cursor-pointer hover:border-[var(--accent)] transition-all gap-2"
                >
-                 <span className="text-[12px] font-medium truncate w-full sm:w-auto text-[var(--accent)] underline">{window.location.origin}{result.url}</span>
+                 <span className="text-[12px] font-medium truncate w-full sm:w-auto text-[var(--accent)] underline">{window.location.origin}{result.url ?? ""}</span>
                  <ExternalLink size={14} className="opacity-40 group-hover:opacity-100 transition-opacity hidden sm:block text-[var(--accent)]" />
                </div>
             </div>
@@ -669,7 +675,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                
                <div className="flex gap-2 text-[10px] mt-4">
                 <button 
-                  onClick={() => handleCopy(result.pickupCode, 'code')}
+                  onClick={() => handleCopy(result.pickupCode ?? "", 'code')}
                   className="flex-1 py-2 sm:py-3 border border-[var(--border-color)] rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-[var(--accent)] transition-all flex items-center justify-center gap-2 bg-[var(--bg-primary)]"
                 >
                   {copyStatus === 'code' ? t.copied : <><Copy size={14} /> {t.copyCode}</>}
@@ -794,7 +800,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
                 file={largeFile}
                 locale={document.documentElement.lang === "en" ? "en" : "zh"}
                 onComplete={(upload) => {
-                  setResult({ ...upload, success: true, expiresAt: upload.expiresAt ?? new Date(Date.now() + Number(duration) * 3600_000).toISOString() });
+                  setResult({ ...upload, success: true, url: `/?pickup=${upload.pickupCode ?? upload.uploadId}`, expiresAt: upload.expiresAt ?? new Date(Date.now() + Number(duration) * 3600_000).toISOString() });
                   setShowQr(true);
                   onSuccess();
                 }}
@@ -851,7 +857,7 @@ function UploadForm({ t, type, setType, onSuccess, config }: { t: any, type: Sto
 /**
  * 提取表单组件：用于输入 6 位验证码
  */
-function PickupForm({ t }: { t: any }) {
+function PickupForm({ t }: { t: Translation }) {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -876,7 +882,7 @@ function PickupForm({ t }: { t: any }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: vCode })
       });
-      const data = await res.json();
+      const data = await res.json() as ExtractResponse;
       if (data.success) {
         // 优选方案：直接通过浏览器跳转到 GET 下载接口，移动端兼容性最佳
         if (data.downloadUrl) {
@@ -884,8 +890,8 @@ function PickupForm({ t }: { t: any }) {
         } else if (data.data) {
           // 备选方案（保留旧逻辑兼容性）
           const link = document.createElement('a');
-          link.href = `data:${data.mimeType};base64,${data.data}`;
-          link.download = data.fileName;
+          link.href = `data:${data.mimeType ?? "application/octet-stream"};base64,${data.data}`;
+          link.download = data.fileName ?? "download";
           link.click();
         } else {
           window.open(data.downloadUrl || `/view/${data.id}`, '_blank');
@@ -958,15 +964,15 @@ function PickupForm({ t }: { t: any }) {
 /**
  * 公开访问页：查看文字内容
  */
-function ViewPage({ t }: { t: any }) {
+function ViewPage({ t }: { t: Translation }) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<PublicViewData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/view/${id}`).then(res => res.json()).then(res => {
+    fetch(`/api/view/${id}`).then(res => res.json() as Promise<PublicViewData>).then(res => {
       if (res.content) setData(res); else setError(t.expired);
       setLoading(false);
     }).catch(() => { setError(t.fail); setLoading(false); });
@@ -994,7 +1000,7 @@ function ViewPage({ t }: { t: any }) {
               }
             `}</style>
           </div>
-        ) : error ? (
+        ) : error || !data ? (
           <div className="card-minimal py-20 text-center space-y-6 border-red-500/20">
              <AlertCircle size={48} className="mx-auto text-red-500/30" />
              <div className="space-y-2">

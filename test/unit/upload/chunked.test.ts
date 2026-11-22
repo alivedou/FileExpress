@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { ChunkedUploadManager, UploadError } from "../../../src/upload/chunked";
+import { ChunkedUploadManager } from "../../../src/upload/chunked";
+import type { UploadError } from "../../../src/upload/chunked";
 import { temporaryDirectory } from "../../helpers";
 
 const expiry = () => new Date(Date.now() + 60_000).toISOString();

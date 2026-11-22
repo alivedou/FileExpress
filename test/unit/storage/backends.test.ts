@@ -104,7 +104,7 @@ describe("DatabaseBlobStorageBackend", () => {
 
 describe("IpfsStorageBackend", () => {
   it("pins content, resolves CIDs and verifies gateway operations", async () => {
-    const client: IpfsClientAdapter = { add: vi.fn(async ({ content }) => { for await (const _chunk of content) { /* consume */ } return { cid: "bafyabcdefghijklmnopqrstuvwxyz", size: 2 }; }), cat: vi.fn(async () => Readable.from(["ipfs"])), unpin: vi.fn(async () => undefined), stat: vi.fn(async () => true), pins: vi.fn(async () => [{ cid: "bafyabcdefghijklmnopqrstuvwxyz", name: "t/a", size: 2, createdAt: "now" }]), gatewayUrl: vi.fn((cid) => `https://ipfs.test/${cid}`), version: vi.fn(async () => undefined) };
+    const client: IpfsClientAdapter = { add: vi.fn(async ({ content }) => { let size = 0; for await (const chunk of content) { size += Buffer.from(chunk as Uint8Array).length; } return { cid: "bafyabcdefghijklmnopqrstuvwxyz", size }; }), cat: vi.fn(async () => Readable.from(["ipfs"])), unpin: vi.fn(async () => undefined), stat: vi.fn(async () => true), pins: vi.fn(async () => [{ cid: "bafyabcdefghijklmnopqrstuvwxyz", name: "t/a", size: 2, createdAt: "now" }]), gatewayUrl: vi.fn((cid) => `https://ipfs.test/${cid}`), version: vi.fn(async () => undefined) };
     const backend = new IpfsStorageBackend(client); await backend.init({ ...backendConfig("ipfs"), options: {} });
     await expect(backend.upload(Readable.from(["ab"]), fileMeta({ id: "t/a" }))).resolves.toMatchObject({ size: 2, versionId: "bafyabcdefghijklmnopqrstuvwxyz" });
     expect(await backend.list("", { tenantId: "t" })).toEqual([expect.objectContaining({ id: "t/a" })]);

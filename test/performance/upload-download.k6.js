@@ -1,3 +1,4 @@
+/* global __ENV, __VU, __ITER */
 import http from "k6/http";
 import { check } from "k6";
 export const options = { scenarios: { mixed: { executor: "constant-vus", vus: Number(__ENV.VUS || 1000), duration: __ENV.DURATION || "10m" } }, thresholds: { http_req_duration: ["p(99)<2000"], http_req_failed: ["rate<0.001"], checks: ["rate>0.999"] } };
