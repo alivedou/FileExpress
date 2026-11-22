@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Readable} from "node:stream";
+import type { Readable } from "node:stream";
 import { Transform } from "node:stream";
 import type { BackendKind, HealthStatus } from "./types";
 

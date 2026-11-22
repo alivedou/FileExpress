@@ -36,15 +36,26 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # 建立应用所需的数据目录，并把 /app 下所有文件的所有权移交给主镜像自带的非特权用户 node
-RUN mkdir -p /app/local_storage && \
+RUN mkdir -p /app/local_storage /data && \
     echo '{"files": {}}' > /app/local_db.json && \
-    chown -R node:node /app
+    chown -R node:node /app /data
 
 # 升级或复制 package.json 文件供启动脚本调用
 COPY --chown=node:node package*.json ./
 
 # 仅安装生产运行依赖，大幅精简体积
 RUN npm ci --omit=dev
+
+ARG INCLUDE_TEST_RUNNER=true
+RUN if [ "$INCLUDE_TEST_RUNNER" = "true" ]; then npm install --prefix /opt/test-runner --no-save --ignore-scripts vitest@3.2.7 supertest@7.2.2; fi
+ENV PATH="/opt/test-runner/node_modules/.bin:${PATH}"
+ENV NODE_PATH="/opt/test-runner/node_modules"
+RUN if [ "$INCLUDE_TEST_RUNNER" = "true" ]; then ln -sfn /opt/test-runner/node_modules/vitest /app/node_modules/vitest && ln -sfn /opt/test-runner/node_modules/supertest /app/node_modules/supertest; fi
+COPY --from=builder --chown=node:node /app/test ./test
+COPY --from=builder --chown=node:node /app/src ./src
+COPY --from=builder --chown=node:node /app/lib ./lib
+COPY --from=builder --chown=node:node /app/vitest.integration.config.ts ./vitest.integration.config.ts
+COPY --from=builder --chown=node:node /app/tsconfig.json ./tsconfig.json
 
 # 复制打包后的编译资源 dist 整个目录
 COPY --from=builder --chown=node:node /app/dist ./dist

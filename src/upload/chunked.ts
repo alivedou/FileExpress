@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import type { Readable} from "node:stream";
+import type { Readable } from "node:stream";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { UploadError } from "./errors";

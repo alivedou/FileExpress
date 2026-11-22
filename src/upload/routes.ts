@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
-import type { ChunkedUploadManager} from "./chunked";
+import type { ChunkedUploadManager } from "./chunked";
 import { UploadError } from "./chunked";
 import { isRecord, type CompletionNotification, type CompletionResult } from "./shared";
 import type { TusUploadManager } from "./tus";
