@@ -1,0 +1,51 @@
+# Architecture and data flow
+
+## Module boundaries
+
+- `src/storage`: backend contract, registry, routing, failover, catalog and migration.
+- `src/upload`: Tus, custom chunks, session locks, digests and recovery.
+- `src/security`: scan engines, aggregation queue and quarantine.
+- `src/drm`: DCT watermarking, visible rendering, policies and device proofs.
+- `src/webhooks`: envelopes, transport buses, reliable delivery and forwarders.
+- `src/auth`: teams, roles, API keys and Express authorisation middleware.
+- `src/audit`: append-only store, signed chain, archives and SIEM export.
+- `src/observability`: metrics, logs, traces and alerts.
+- `src/api`: Express enterprise routes and cross-module orchestration.
+
+Backend adapters are injected through interfaces so unit tests do not require cloud services. Express remains the application server, with React, Tailwind and Framer Motion on the frontend.
+
+## Upload data flow
+
+```text
+Browser → Tus/Chunks → Session lock + checksum → Storage registry
+        → Persistent catalog → Upload event → Scan queue
+        → Clean / Review / Quarantine → Download authorisation
+```
+
+Temporary sessions and formal objects are distinct. The catalog stores the successful backend name, so downloads read from that backend rather than re-evaluating a potentially different route after failover.
+
+## Consistency boundaries
+
+The local catalog serialises in-process writes and atomically replaces files; this is not a distributed transaction. An object can become orphaned between cloud upload and catalog persistence, so production needs periodic reconciliation and cleanup.
+
+Scanning is asynchronous after catalog registration, and downloads require `clean`. Scanner outages leave `pending` or `error`, producing temporary unavailability rather than unscanned downloads.
+
+Webhooks notify after business actions and are not part of a database transaction. Strict exactly-once processing needs a durable outbox, delivery acknowledgements and consumer idempotency; the in-memory bus is not a transactional outbox.
+
+## Tenant boundaries
+
+API key authentication establishes tenant and permission before checking target query/body/scope consistency. Role permission is only one layer; resource queries must also filter by tenant. Server-written administrative audit reduces forgery entry points.
+
+Custom domains assist team resolution but do not replace Host validation and TLS hostname verification. Branding fields require length and format validation against CSS/HTML injection.
+
+## Security boundaries
+
+Secrets arrive through environment or external secret providers. Configuration output and errors are redacted. Object IDs, quarantine paths, YARA arguments and FFmpeg arguments are controlled. Audit chains detect modification, but an attacker with both the key and write access can rebuild them; external signing and WORM archives remain necessary.
+
+## Scaling path
+
+Before multiple replicas, replace local metadata with shared transactions, add a durable event/outbox, distributed rate limits, shared DRM counters, distributed upload locks and suitable object/volume storage. Validate failure and consistency at every step instead of only increasing Deployment replicas.
+
+## ADR
+
+`docs/adr` records storage abstraction, streaming upload and audit integrity decisions. Major features should document context, alternatives, decision, consequences and rollback conditions so design rationale survives the implementation.

@@ -1,0 +1,82 @@
+# Storage backends
+
+## Unified contract
+
+Every backend implements `StorageBackend`: initialisation, streaming upload and download, deletion, existence checks, presigned URLs, paginated listing and health checks. `StorageRegistry` handles the default backend, MIME/size routing, configuration redaction, aggregated health and failover.
+
+```dotenv
+STORAGE_BACKEND=local
+STORAGE_BACKENDS=local,s3,db
+```
+
+The first variable selects the default type; the comma-separated list enables additional backends. Failover requires a factory that creates a fresh readable stream for every attempt. A consumed or destroyed stream is never replayed.
+
+## Local filesystem
+
+```dotenv
+STORAGE_BACKEND=local
+DATA_DIR=/data
+```
+
+Objects are written to temporary files and atomically renamed, with separate metadata. Object identifiers undergo containment checks against traversal. The local catalog and JSON-based metadata are intended for a single process or controlled shared storage; independent writer replicas are not a highly available database.
+
+## S3-compatible storage
+
+```dotenv
+STORAGE_BACKEND=s3
+S3_BUCKET=fileexpress
+AWS_REGION=us-east-1
+S3_ENDPOINT=http://minio:9000
+S3_FORCE_PATH_STYLE=true
+AWS_ACCESS_KEY_ID=<injected-secret>
+AWS_SECRET_ACCESS_KEY=<injected-secret>
+```
+
+AWS deployments can omit the endpoint and static credentials in favour of workload identity. MinIO, R2 and GCS-compatible endpoints commonly require an explicit address and path-style access. Small objects use bounded buffering; large objects use parts of at least 5 MiB and failed multipart uploads are aborted. Version IDs and upload/download presigning are preserved.
+
+Configure lifecycle rules at the provider as well: expire temporary objects, abort incomplete multipart uploads and retain quarantine according to policy. Test application deletion and provider lifecycle independently.
+
+## Azure Blob
+
+```dotenv
+STORAGE_BACKEND=azure
+AZURE_CONTAINER=fileexpress
+AZURE_STORAGE_CONNECTION_STRING=<injected-secret>
+AZURE_HIERARCHICAL_NAMESPACE=true
+AZURE_CDN_BASE_URL=https://cdn.example.test
+```
+
+Large files use staged and committed blocks. Immutability settings can be supplied by backend configuration, while CDN replacement applies only to download URLs. Upload presigning still targets Blob Storage directly. Deleting an immutable object may be rejected by the service by design.
+
+## PostgreSQL BLOB
+
+```dotenv
+STORAGE_BACKEND=db
+DATABASE_URL=postgres://fileexpress:<secret>@postgres:5432/fileexpress
+DATABASE_OBJECT_TABLE=fileexpress_objects
+```
+
+Metadata and chunks are written in one transaction, and table identifiers are strictly validated. Downloads iterate chunks asynchronously rather than concatenating the complete BLOB in memory. Metadata supports full-text search. Back up the database independently and test transactional recovery.
+
+## IPFS and pinning services
+
+```dotenv
+STORAGE_BACKEND=ipfs
+IPFS_API_URL=http://ipfs:5001
+IPFS_GATEWAY_URL=https://ipfs.example.test/ipfs
+IPFS_API_TOKEN=<injected-secret>
+IPFS_PINNING_SERVICE_URL=https://pin.example.test
+IPFS_PINNING_SERVICE_TOKEN=<injected-secret>
+```
+
+Uploads return a CID, and the ID-to-CID mapping is persisted under `DATA_DIR/ipfs`. Deletion unpins content but cannot erase blocks already replicated elsewhere. A public gateway does not enforce an application signature appended to its URL. Use a controlled signing proxy for private content and never treat an ordinary gateway URL as secure presigning.
+
+## Health and migration
+
+Administrative registration immediately performs a health check. Credentials are redacted from configuration lists and errors. `StorageMigrator` copies objects as streams and compares size and SHA-256. Source deletion occurs only after verification and only when `deleteSource` is explicit.
+
+```bash
+npx tsx scripts/storage-migrate.ts
+```
+
+Back up metadata first, bound concurrency, record failed objects and never remove source data after a checksum failure.

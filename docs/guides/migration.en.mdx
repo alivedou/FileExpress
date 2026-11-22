@@ -1,0 +1,56 @@
+# Data and backend migration
+
+## Preflight
+
+Back up `local_db.json`, local objects and the enterprise catalog. Record file count, bytes and sampled SHA-256 values. Verify target capacity, lifecycle, versioning and credential permissions, then pause unnecessary writes or establish a consistent migration window.
+
+Checklist:
+
+- `DATA_DIR` is writable with room for temporary chunks and backups.
+- Source and destination health checks pass.
+- Secrets come from a secret manager and never appear in migration logs.
+- Rollback, retry and source-retention policies are defined.
+- Replica write traffic cannot bypass the migration lock.
+
+## Metadata migration
+
+```bash
+npx tsx scripts/migrate.ts status
+npx tsx scripts/migrate.ts up
+npx tsx scripts/migrate.ts down 001
+```
+
+The runner records versions and uses transactional, idempotent steps. `down` applies only to migrations with an explicit inverse. Destructive schema changes or external object operations often require a forward fix rather than a claimed lossless rollback.
+
+Legacy public/private records retain their compatible format. Enterprise records additionally store backend name, checksum, scan state, tenant and download count. Never assign different tenants in bulk without an explicit mapping policy.
+
+## Object migration
+
+```bash
+npx tsx scripts/storage-migrate.ts
+```
+
+`StorageMigrator` paginates source objects, copies with bounded streaming concurrency and compares source metadata, output size and freshly calculated SHA-256. Repeated or non-advancing cursors stop migration to prevent loops and omissions.
+
+Source objects remain by default. Only after complete copy and verification should a separate cleanup phase set `deleteSource`. Individual failures must remain visible rather than disappearing into an overall percentage.
+
+## Resume and recovery
+
+After interruption, inspect the failure list and retry by object ID and digest. A destination object with a different checksum is a conflict, not a skippable success. After a network timeout, query destination state before assuming the upload failed.
+
+Abort incomplete cloud multipart uploads to avoid ongoing charges. IPFS migration must persist the new ID-to-CID mapping rather than copying only catalog records.
+
+## Cutover and rollback
+
+1. Run a full staging migration and sampled downloads.
+2. Compare count, size and digest for every catalog object.
+3. Run scan, webhook, audit and expiration regressions.
+4. Shift a small share of reads and observe errors and latency.
+5. Shift writes while retaining source data.
+6. Schedule source cleanup only after a stable period.
+
+Rollback should route back to the intact source. If the destination accepted new writes, reverse-sync the differences first; never overwrite new state with an old backup.
+
+## Verification report
+
+A migration report includes start/end time, backend types, total, completed, failed, skipped, retries, bytes, checksum conflicts and operator. Export it to the audit system and redact sensitive object identifiers where required.

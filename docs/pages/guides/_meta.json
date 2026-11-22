@@ -1,0 +1,14 @@
+{
+  "quick-start": "快速开始",
+  "storage": "存储后端",
+  "uploads": "大文件断点续传",
+  "security-drm": "内容扫描与 DRM",
+  "webhooks-rbac": "Webhook、团队与 RBAC",
+  "observability-migration": "可观测性与运维",
+  "authentication": "认证与授权",
+  "deployment": "部署与 GitOps",
+  "testing": "测试与验收",
+  "migration": "数据与后端迁移",
+  "architecture": "架构与数据流",
+  "troubleshooting": "故障排查"
+}

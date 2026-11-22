@@ -1,0 +1,14 @@
+{
+  "quick-start": "Quick start",
+  "storage": "Storage backends",
+  "uploads": "Resumable large-file uploads",
+  "security-drm": "Content scanning and DRM",
+  "webhooks-rbac": "Webhooks, teams and RBAC",
+  "observability-migration": "Observability and operations",
+  "authentication": "Authentication and authorisation",
+  "deployment": "Deployment and GitOps",
+  "testing": "Testing and acceptance",
+  "migration": "Data and backend migration",
+  "architecture": "Architecture and data flow",
+  "troubleshooting": "Troubleshooting"
+}

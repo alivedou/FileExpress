@@ -26,3 +26,9 @@ local_db.json
 test-results/
 *.pem
 *.key
+docs/.next/
+docs/out/
+docs/node_modules/
+enterprise_catalog.json
+data/
+quarantine/

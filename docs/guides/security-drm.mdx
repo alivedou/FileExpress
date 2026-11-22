@@ -1,5 +1,47 @@
-# 扫描、水印与 DRM / Scanning, watermarking and DRM
+# 内容扫描与 DRM
 
-上传后并行执行 ClamAV、VirusTotal、YARA 与启发式引擎。恶意文件进入隔离区，可疑文件进入人工复核；引擎错误不会被误判为安全。所有结果产生扫描事件。
+## 扫描管线
 
-The raw-image watermark embeds an HMAC-authenticated payload into DCT coefficient relationships with repetition and majority decoding. Visible SVG overlays escape XML input. DRM checks action, user, MIME, CIDR, device, view count and expiry before content access. Screenshot prevention is a client policy signal, not an operating-system guarantee; deployments must combine it with visible/invisible forensics.
+上传完成后进入有界异步队列。各引擎并行执行，单个引擎有超时，聚合结果按恶意、可疑、错误、干净的优先级决定动作。默认错误采取失败关闭策略，不会因为引擎不可用直接放行。
+
+| 引擎        | 配置                                 | 说明                                         |
+| ----------- | ------------------------------------ | -------------------------------------------- |
+| 启发式      | 默认启用                             | 熵、PE/ELF、宏、PDF 活跃内容和嵌入可执行特征 |
+| ClamAV TCP  | `CLAMAV_URL=tcp://clamav:3310`       | INSTREAM 分帧、背压、响应解析和超时          |
+| ClamAV HTTP | `CLAMAV_URL=http://clamav-api:8080`  | `/scan` 与 `/version` 适配                   |
+| YARA        | `YARA_RULES_PATH=/rules/default.yar` | 无 shell 调用、受控规则路径和临时目录        |
+| VirusTotal  | `VIRUSTOTAL_API_KEY=<Secret>`        | 哈希缓存、上传、轮询和签名回调               |
+
+扫描结果可能是 `clean`、`suspicious`、`malicious` 或 `error`，动作包括接受、人工复核、隔离和拒收。白名单使用重新计算的 SHA-256，不能覆盖恶意结论。
+
+## 隔离区
+
+隔离记录使用随机 ID，目录权限为 0700、文件权限为 0600。载荷写入和元数据更新采用原子操作，恢复前验证大小、摘要、路径包含和符号链接风险。损坏对象仍可安全删除。
+
+隔离不等于删除。管理员应定义保留期限、复核角色和恢复流程。恢复目标必须位于受控目录且禁止覆盖现有文件。
+
+## VirusTotal 回调
+
+回调地址为 `POST /api/webhook/virustotal`。服务使用原始请求体验证时间戳和 HMAC，拒绝过期或无效签名。回调中的文件哈希用于关联目录对象；恶意结果会更新隔离状态并发送 `scan.threat_detected`。
+
+API Key 只放在请求头，不应出现在 URL、日志或错误消息中。云端扫描可能使文件内容离开当前司法辖区，启用前必须完成数据分类和合规评估。
+
+## 不可见水印
+
+图像实现使用 8×8 DCT 中频系数关系、密钥控制块置换、冗余嵌入和 HMAC 完整性验证。`extractWatermark` 可以盲提取载荷并返回置信度，不要求原图。
+
+它用于泄露溯源，不是不可破解的版权保护。压缩、裁剪、缩放、重编码、拍照、合谋和针对性移除都可能破坏水印。不得宣称其天然抗截图或所有攻击。
+
+## 可见水印与视频
+
+图片通过 SVG 叠加动态文本，PDF 使用 `pdf-lib` 添加页面水印。视频通过独立 FFmpeg 适配器执行可见 `drawtext` 转码，水印文本写入受控临时文件，避免滤镜注入。当前不宣称支持视频盲水印。
+
+水印内容可以包含提取码、用户邮箱和时间。敏感字段进入水印前应遵循最小化原则，避免把完整邮箱或个人数据暴露给不必要的接收者。
+
+## DRM 决策
+
+策略可限制项目、用户、MIME、动作、IP CIDR、设备、到期时间和视图次数，并设置水印密度。缺失必需项目或租户上下文时失败关闭。设备证明使用带发行时间和到期时间的签名，但不等于硬件证明。
+
+`download`、`print`、`screen` 等动作必须统一经过执行点。浏览器不能真正禁止截屏、拍照或复制已经释放的内容，自毁也不能召回接收者已经保存的副本。
+
+视图计数当前是进程内实现。多副本部署需要共享且原子的计数存储，否则不同副本可能分别放行同一配额。

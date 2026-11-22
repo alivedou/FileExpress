@@ -1,0 +1,47 @@
+# Content scanning and DRM
+
+## Scan pipeline
+
+Completed uploads enter a bounded asynchronous queue. Engines run in parallel with per-engine timeouts, and results are aggregated by malicious, suspicious, error and clean priority. Errors fail closed by default instead of allowing content when an engine is unavailable.
+
+| Engine      | Configuration                        | Behaviour                                                            |
+| ----------- | ------------------------------------ | -------------------------------------------------------------------- |
+| Heuristic   | Enabled by default                   | Entropy, PE/ELF, macros, active PDF content and embedded executables |
+| ClamAV TCP  | `CLAMAV_URL=tcp://clamav:3310`       | INSTREAM framing, backpressure, response parsing and timeouts        |
+| ClamAV HTTP | `CLAMAV_URL=http://clamav-api:8080`  | `/scan` and `/version` adapters                                      |
+| YARA        | `YARA_RULES_PATH=/rules/default.yar` | No shell, controlled rule path and temporary directories             |
+| VirusTotal  | `VIRUSTOTAL_API_KEY=<Secret>`        | Hash cache, upload, polling and signed callbacks                     |
+
+Verdicts are `clean`, `suspicious`, `malicious` or `error`; actions include accept, review, quarantine and reject. Whitelists use a freshly calculated SHA-256 and cannot override a malicious result.
+
+## Quarantine
+
+Quarantine records use random IDs, directory mode 0700 and file mode 0600. Payload and metadata updates are atomic. Restore validates size, digest, path containment and symlink risks. Corrupt objects can still be deleted safely.
+
+Quarantine is not deletion. Define retention, reviewer roles and restoration procedures. Restore destinations must be controlled and must not overwrite existing files.
+
+## VirusTotal callbacks
+
+The callback is `POST /api/webhook/virustotal`. The service verifies timestamp and HMAC over the raw request body and rejects stale or invalid signatures. The file hash associates an analysis with a catalog object; malicious results update quarantine and emit `scan.threat_detected`.
+
+API keys appear only in request headers, never URLs, logs or error messages. Cloud scanning may move content outside the current jurisdiction, so perform data classification and compliance review before enabling it.
+
+## Invisible watermarks
+
+The image implementation uses 8×8 DCT mid-frequency coefficient relations, key-controlled block permutations, redundant embedding and HMAC integrity. `extractWatermark` blindly recovers a payload with confidence and does not require the original image.
+
+This supports leak attribution, not unbreakable copyright protection. Compression, cropping, scaling, re-encoding, photography, collusion and targeted removal can damage the watermark. Never claim inherent resistance to screenshots or every attack.
+
+## Visible watermarks and video
+
+Images receive dynamic SVG overlays and PDFs use `pdf-lib`. Video uses a separate FFmpeg adapter for visible `drawtext` transcoding; text is supplied through a controlled temporary file to avoid filter injection. Blind video watermarking is not claimed.
+
+Watermarks can contain a pickup code, user email and timestamp. Minimise personal data before rendering and avoid exposing a complete email address to unnecessary recipients.
+
+## DRM decisions
+
+Policies can restrict project, user, MIME, action, IP CIDR, device, expiration and view count, with configurable watermark density. Missing required project or tenant context fails closed. Device proofs carry issue and expiration times but are not hardware attestation.
+
+Every `download`, `print` and `screen` entry point must pass through the enforcement point. A browser cannot truly disable screenshots, photography or copying of released content, and self-destruction cannot recall copies already saved by a recipient.
+
+View counters are currently process-local. Multi-replica deployments require a shared atomic counter, otherwise separate replicas can independently grant the same quota.

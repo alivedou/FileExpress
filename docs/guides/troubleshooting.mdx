@@ -1,0 +1,60 @@
+# 故障排查
+
+## 服务无法启动
+
+生产环境缺少 `STORAGE_ENCRYPTION_KEY` 或 `WEBHOOK_SIGNING_SECRET` 会拒绝启动。检查 Secret 名称、键名和挂载方式，不要把真实值打印到日志。
+
+云后端配置不完整也会导致 readiness 失败。S3 检查 bucket、endpoint、区域和身份；Azure 检查连接串与容器；数据库检查连接串和迁移权限；IPFS 检查 API 地址和映射目录。
+
+## 上传返回 409 或 422
+
+- Tus 409：客户端偏移与服务端不一致，先 HEAD 再重试。
+- 分片 409：存在缺失分片、同序号冲突或会话状态不允许操作。
+- 422：分片或最终 SHA-256 不匹配，重新读取原始切片并计算摘要。
+- 410：会话已过期，创建新会话，不要继续使用旧临时数据。
+
+重复完成请求必须返回相同提取码。若不同，检查会话文件是否持久化以及是否错误清理了完成状态。
+
+## 上传成功但无法下载
+
+企业目录只放行 `clean`。查询 `/api/extract` 中的 `scanStatus`：
+
+- `pending`：扫描排队或需要复核。
+- `error`：引擎失败或回调异常，检查引擎健康。
+- `quarantined`：命中威胁，进入隔离流程。
+- 不存在：提取码错误、已过期或下载次数耗尽。
+
+还要检查目录记录中的实际后端是否健康，以及对象是否被外部生命周期提前删除。
+
+## ClamAV、YARA 或 VirusTotal 异常
+
+ClamAV TCP 检查 3310 连通性和 INSTREAM 响应；HTTP 检查 `/version` 与 `/scan`。YARA 检查二进制、规则文件权限和退出码。VirusTotal 检查速率限制、分析状态和回调时间戳。
+
+回调签名失败时确认使用原始请求体、正确 Secret 和同步时钟。不要通过关闭签名验证来恢复业务。
+
+## Webhook 重复或死信
+
+重复通常是超时后的正常重试，接收方应按幂等键去重。死信表示重试耗尽，检查 HTTP 状态、响应正文、TLS、DNS 和目标超时，再从管理端手动重发。
+
+不要把 200 响应但业务处理失败当作成功。接收端应在持久化事件后快速返回 2xx，重任务异步执行。
+
+## 审计链验证失败
+
+检查文件是否被手工编辑、替换或部分写入，确认签名 Secret 是否轮换以及归档锚点是否连续。保留原始证据，不要直接删除异常记录。
+
+若密钥泄露且攻击者有写权限，链可能被重建，必须结合外部 WORM/SIEM 和主机审计调查。
+
+## 部署不健康
+
+```bash
+kubectl describe pod -n fileexpress-dev -l app.kubernetes.io/name=fileexpress
+kubectl logs -n fileexpress-dev deploy/fileexpress
+helm status fileexpress-dev -n fileexpress-dev
+argocd app get fileexpress-dev
+```
+
+只读根文件系统问题检查 `/data`、`/tmp` 挂载；PVC 问题检查访问模式和节点亲和；探针问题区分 liveness 与 readiness；VPA/PodMonitor 问题检查 CRD 和监控命名空间。
+
+## 性能下降
+
+先区分上传、下载、扫描还是后端延迟。观察 P99、队列、CPU、内存、GC、磁盘和网络。大文件应使用流式分片，避免把完整对象同时加载到多个 Buffer。降低并发前先确认瓶颈，盲目调低可能增加排队时间。

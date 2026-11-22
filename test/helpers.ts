@@ -12,13 +12,15 @@ export async function temporaryDirectory(label: string): Promise<string> {
 }
 
 export async function cleanupTestDirectories(): Promise<void> {
-  await Promise.all([...directories].map(async (directory) => {
-    await rm(directory, { recursive: true, force: true });
-    directories.delete(directory);
-  }));
+  await Promise.all(
+    [...directories].map(async (directory) => {
+      await rm(directory, { recursive: true, force: true });
+      directories.delete(directory);
+    }),
+  );
 }
 
-export function backendConfig(kind: BackendConfig["kind"] = "local", name = kind): BackendConfig {
+export function backendConfig(kind: BackendConfig["kind"] = "local", name: string = kind): BackendConfig {
   return { name, kind, enabled: true, priority: 10, options: {} };
 }
 

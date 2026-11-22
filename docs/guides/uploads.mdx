@@ -1,5 +1,67 @@
-# 大文件续传 / Resumable uploads
+# 大文件断点续传
 
-Tus 客户端必须发送 `Tus-Resumable: 1.0.0`，PATCH 使用 `application/offset+octet-stream` 并从 HEAD 返回的偏移继续。自研分片接口允许并发上传、逐块 SHA-256 校验、幂等重试与过期清理。
+## 协议选择
 
-For custom chunks, create a session, query received chunks after a network failure, upload only missing chunks, then call `/complete`. `MAX_CHUNK_SIZE_MB`, `MAX_CONCURRENT_CHUNKS` and `UPLOAD_EXPIRY_HOURS` bound resource usage. Pause stops scheduling new chunks; it does not discard already accepted chunks.
+FileExpress 同时提供 Tus 1.0.0 和自研并发分片。Tus 适合标准客户端与顺序追加；自研分片适合浏览器并行上传、暂停继续和逐块校验。超过 100 MiB 的单文件在前端进入大文件模式，不再走 Multer 兼容接口。
+
+```dotenv
+MAX_CHUNK_SIZE_MB=8
+MAX_CONCURRENT_CHUNKS=3
+UPLOAD_EXPIRY_HOURS=24
+LARGE_FILE_THRESHOLD_MB=100
+```
+
+## Tus 流程
+
+创建上传：
+
+```http
+POST /api/upload/tus
+Tus-Resumable: 1.0.0
+Upload-Length: 524288000
+Upload-Metadata: filename dmlkZW8ubXA0,filetype dmlkZW8vbXA0
+```
+
+服务返回 201 和 `Location`。断网后发送 HEAD：
+
+```http
+HEAD /api/upload/tus/{id}
+Tus-Resumable: 1.0.0
+```
+
+根据 `Upload-Offset` 继续 PATCH，Content-Type 必须是 `application/offset+octet-stream`。偏移不一致返回 409，客户端不能盲目覆盖后续数据。DELETE 会终止会话并删除临时数据。
+
+实现支持 creation、creation-with-upload、termination 和 expiration。最终完成时验证大小及可选 SHA-256，回调结果保存在会话中，因此重复完成请求仍返回相同提取码。
+
+## 自研分片流程
+
+1. POST `/api/upload/chunks` 创建会话。
+2. 保存 `uploadId`、`chunkSize` 和 `totalChunks`。
+3. 对每个分片计算 SHA-256。
+4. PUT `/api/upload/chunks/{id}/{index}`，携带 `X-Chunk-SHA256`。
+5. 网络恢复后 GET `/api/upload/chunks/{id}`，只上传缺失分片。
+6. POST `/api/upload/chunks/{id}/complete`，可携带最终 SHA-256。
+
+重复发送相同分片是幂等操作；同一序号使用不同校验和会返回冲突。完成前会检查所有分片，按顺序流式合并，再次计算整体摘要。缺少分片、大小不符或摘要不符都不会进入存储。
+
+## 暂停与重试
+
+浏览器暂停只停止调度新分片，不会取消已经被服务器接受的分片。继续时根据服务端状态重新计算待上传集合。默认采用有界并发和指数退避，避免网络故障期间创建无界请求。
+
+不要把上传 ID 当作授权凭证。生产部署应在反向代理和企业身份层限制上传租户、速率和总配额，并确保会话目录不通过静态资源公开。
+
+## 完成后的处理
+
+完成回调依次执行：
+
+1. 通过注册表路由并持久化到实际后端。
+2. 在原子写入的文件目录中登记后端、大小、摘要、提取码和过期时间。
+3. 发布 `file.uploaded`。
+4. 异步执行扫描并更新 `pending`、`clean`、`quarantined` 或 `error` 状态。
+5. 发布 `file.scanned`，恶意对象从正常下载路径隔离。
+
+只有 `clean` 状态允许企业目录中的下载。下载次数耗尽后删除对象和目录记录，并发布过期事件。
+
+## 运维清理
+
+上传会话有到期时间，清理任务应周期运行。过期未完成分片不能参与合并。对 500 MiB 或更大文件的验收必须包含进程重启、网络中断、重复 PATCH、磁盘不足和后端故障，而不只是一次成功上传。

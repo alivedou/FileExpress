@@ -31,6 +31,7 @@ export interface FileMeta {
 export interface UploadResult {
   id: string;
   backend: BackendKind;
+  backendName?: string;
   size: number;
   checksum: string;
   versionId?: string;
@@ -41,12 +42,18 @@ export interface PresignOpts {
   expiresIn: number;
   operation?: "download" | "upload";
   contentType?: string;
+  versionId?: string;
 }
 
 export interface ListOpts {
   limit?: number;
   cursor?: string;
   tenantId?: string;
+}
+
+export interface StorageListPage {
+  files: FileMeta[];
+  nextCursor?: string;
 }
 
 export interface HealthStatus {
@@ -66,6 +73,7 @@ export interface StorageBackend {
   exists(id: string): Promise<boolean>;
   getPresignedUrl(id: string, opts: PresignOpts): Promise<string>;
   list(prefix: string, opts: ListOpts): Promise<FileMeta[]>;
+  listPage?(prefix: string, opts: ListOpts): Promise<StorageListPage>;
   healthCheck(): Promise<HealthStatus>;
 }
 

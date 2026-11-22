@@ -11,5 +11,8 @@ for (let index = 0; index < iterations; index += 1) {
   results.push({ iteration: index, action, status: response.status, healthy: body.healthy, valid });
   if (!valid) throw new Error(`Unexpected readiness status ${response.status}`);
 }
-if (results.some((item) => item.healthy && item.status !== 200)) throw new Error("Readiness status/body mismatch");
-console.log(JSON.stringify({ iterations, passed: results.filter((item) => item.valid).length, results }, null, 2));
+if (results.some((item) => item.healthy && item.status !== 200))
+  throw new Error("Readiness status/body mismatch");
+console.log(
+  JSON.stringify({ iterations, passed: results.filter((item) => item.valid).length, results }, null, 2),
+);

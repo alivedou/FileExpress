@@ -1,32 +1,31 @@
-version: '3.8'
-
 services:
   file-express:
-    # 本地编译模式（默认）。如需切换 GHCR 预编译镜像，用 fe.sh 选项1 自动处理
     build: .
     container_name: file-express-app
     restart: always
     ports:
-      # 映射到宿主机的 PORT 端口，默认为 3000
       - "${PORT:-3000}:3000"
     environment:
-      - NODE_ENV=production
-      - PORT=${PORT:-3000}
-      - APP_NAME=${APP_NAME:-File Express}
-      - APP_SUBTITLE=${APP_SUBTITLE:-极简、安全、临时的文件传输中心}
-      - MAX_SINGLE_FILE_SIZE_MB=${MAX_SINGLE_FILE_SIZE_MB:-10}
-      - MAX_ZIP_PAYLOAD_SIZE_MB=${MAX_ZIP_PAYLOAD_SIZE_MB:-50}
-      - MAX_TOTAL_STORAGE_MB=${MAX_TOTAL_STORAGE_MB:-1024}
-      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY:-8664183d-3b8f-431f-9988-6622b72f104d}
-      - JWT_SECRET=${JWT_SECRET:-fileexpresssecret}
-      - MAX_STORAGE_HOURS=${MAX_STORAGE_HOURS:-24}
-      - MAX_DOWNLOADS=${MAX_DOWNLOADS:-100}
+      NODE_ENV: production
+      PORT: "3000"
+      DATA_DIR: /data
+      APP_NAME: "${APP_NAME:-File Express}"
+      APP_SUBTITLE: "${APP_SUBTITLE:-极简、安全、临时的文件传输中心}"
+      MAX_SINGLE_FILE_SIZE_MB: "${MAX_SINGLE_FILE_SIZE_MB:-10}"
+      MAX_ZIP_PAYLOAD_SIZE_MB: "${MAX_ZIP_PAYLOAD_SIZE_MB:-50}"
+      MAX_TOTAL_STORAGE_MB: "${MAX_TOTAL_STORAGE_MB:-1024}"
+      MAX_STORAGE_HOURS: "${MAX_STORAGE_HOURS:-24}"
+      MAX_DOWNLOADS: "${MAX_DOWNLOADS:-100}"
+      STORAGE_BACKEND: "${STORAGE_BACKEND:-local}"
+      STORAGE_BACKENDS: "${STORAGE_BACKENDS:-local}"
+      MAX_CHUNK_SIZE_MB: "${MAX_CHUNK_SIZE_MB:-8}"
+      MAX_CONCURRENT_CHUNKS: "${MAX_CONCURRENT_CHUNKS:-3}"
+      UPLOAD_EXPIRY_HOURS: "${UPLOAD_EXPIRY_HOURS:-24}"
+      STORAGE_ENCRYPTION_KEY: "${STORAGE_ENCRYPTION_KEY:?STORAGE_ENCRYPTION_KEY must be injected}"
+      WEBHOOK_SIGNING_SECRET: "${WEBHOOK_SIGNING_SECRET:?WEBHOOK_SIGNING_SECRET must be injected}"
+      ADMIN_API_TOKEN: "${ADMIN_API_TOKEN:?ADMIN_API_TOKEN must be injected}"
     volumes:
-      # 挂载数据卷实现持久化存储。重新构建容器、更新镜像时，数据和元数据库不会丢失
-      # 1. 物理上传的文件本地卷挂载
-      - ./local_storage:/app/local_storage
-      
-      # 2. 本地元数据数据库卷挂载
-      # 提示：若宿主机上没有该空文件，Docker 会默认将其挂载为文件夹导致报错。
-      # 启动前建议在本地先执行命令：touch local_db.json
-      - ./local_db.json:/app/local_db.json
+      - fileexpress-data:/data
+
+volumes:
+  fileexpress-data:

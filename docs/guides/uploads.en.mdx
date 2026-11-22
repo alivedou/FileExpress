@@ -1,0 +1,67 @@
+# Resumable large-file uploads
+
+## Choose a protocol
+
+FileExpress provides both Tus 1.0.0 and custom concurrent chunks. Tus suits standard clients and sequential append; custom chunks suit parallel browser uploads, pause/resume and per-chunk verification. A single file above 100 MiB enters large-file mode instead of the Multer compatibility path.
+
+```dotenv
+MAX_CHUNK_SIZE_MB=8
+MAX_CONCURRENT_CHUNKS=3
+UPLOAD_EXPIRY_HOURS=24
+LARGE_FILE_THRESHOLD_MB=100
+```
+
+## Tus flow
+
+Create an upload:
+
+```http
+POST /api/upload/tus
+Tus-Resumable: 1.0.0
+Upload-Length: 524288000
+Upload-Metadata: filename dmlkZW8ubXA0,filetype dmlkZW8vbXA0
+```
+
+The server returns 201 and `Location`. After a network failure, send HEAD:
+
+```http
+HEAD /api/upload/tus/{id}
+Tus-Resumable: 1.0.0
+```
+
+Resume PATCH at `Upload-Offset` with `application/offset+octet-stream`. A mismatch returns 409; clients must not blindly overwrite later bytes. DELETE terminates the session and removes temporary data.
+
+Creation, creation-with-upload, termination and expiration are supported. Completion validates size and an optional SHA-256. The callback result is stored in the session, so repeated completion requests return the same pickup code.
+
+## Custom chunk flow
+
+1. POST `/api/upload/chunks` to create a session.
+2. Persist `uploadId`, `chunkSize` and `totalChunks`.
+3. Compute SHA-256 for every chunk.
+4. PUT `/api/upload/chunks/{id}/{index}` with `X-Chunk-SHA256`.
+5. After recovery, GET the session and upload only missing chunks.
+6. POST `/api/upload/chunks/{id}/complete`, optionally with the final SHA-256.
+
+Replaying an identical chunk is idempotent; reusing its index with another digest returns a conflict. Completion checks every chunk, merges sequentially as a stream and calculates the full digest again. Missing chunks, incorrect sizes and checksum failures never reach storage.
+
+## Pause and retry
+
+Browser pause stops scheduling new chunks; it does not cancel chunks already accepted by the server. Resume reconciles server state to calculate the pending set. Bounded concurrency and exponential backoff prevent an unbounded request storm during network failures.
+
+An upload ID is not an authorisation credential. In production, enforce tenant identity, request rates and aggregate quotas at the application and proxy layers, and never expose the session directory as static content.
+
+## Completion pipeline
+
+The completion callback performs these steps:
+
+1. Route and persist the object through the storage registry.
+2. Atomically catalog its backend, size, digest, pickup code and expiration.
+3. Publish `file.uploaded`.
+4. Scan asynchronously and update `pending`, `clean`, `quarantined` or `error`.
+5. Publish `file.scanned`; malicious objects leave the normal download path.
+
+Only `clean` catalog entries can be downloaded. Exhausting the download limit removes the object and catalog entry and publishes an expiration event.
+
+## Operational cleanup
+
+Upload sessions expire and cleanup should run periodically. Expired incomplete chunks cannot be merged. Acceptance with files of 500 MiB or more must include process restarts, network failures, repeated PATCH requests, full disks and backend outages, not just one successful upload.

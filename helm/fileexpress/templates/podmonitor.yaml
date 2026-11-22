@@ -1,7 +1,10 @@
 {{- if .Values.podMonitor.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
-metadata: { name: fileexpress, labels: {{- include "fileexpress.labels" . | nindent 4 }} }
+metadata:
+  name: fileexpress
+  labels:
+    {{- include "fileexpress.labels" . | nindent 4 }}
 spec:
   selector: { matchLabels: { app.kubernetes.io/name: fileexpress } }
   podMetricsEndpoints: [{ port: http, path: /metrics, interval: {{ .Values.podMonitor.interval }} }]

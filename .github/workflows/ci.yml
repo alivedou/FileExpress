@@ -1,31 +1,63 @@
 name: ci
-on: { push: { branches: [main, v2] }, pull_request: {} }
-permissions: { contents: read, packages: write, id-token: write }
-concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+on:
+  push:
+    branches: [main, v2]
+  pull_request: {}
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+concurrency:
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
     services:
-      minio: { image: minio/minio:latest, env: { MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin }, ports: [9000:9000], options: --entrypoint sh minio/minio:latest -c "minio server /data" }
-      postgres: { image: postgres:17-alpine, env: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: fileexpress }, ports: [5432:5432], options: --health-cmd "pg_isready" --health-interval 5s --health-timeout 3s --health-retries 20 }
-      clamav: { image: clamav/clamav:stable, ports: [3310:3310] }
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports: ["9000:9000"]
+        options: --entrypoint sh minio/minio:latest -c "minio server /data"
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fileexpress
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready" --health-interval 5s --health-timeout 3s --health-retries 20
+      clamav:
+        image: clamav/clamav:stable
+        ports: ["3310:3310"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
-      - run: npm install
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test:coverage
       - run: npm run test:integration
-        env: { MINIO_ENDPOINT: http://localhost:9000, DATABASE_URL: postgres://postgres:postgres@localhost:5432/fileexpress, CLAMAV_URL: tcp://localhost:3310 }
+        env:
+          MINIO_ENDPOINT: http://localhost:9000
+          AWS_ACCESS_KEY_ID: minioadmin
+          AWS_SECRET_ACCESS_KEY: minioadmin
+          S3_BUCKET: fileexpress-test
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/fileexpress
+          CLAMAV_URL: tcp://localhost:3310
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run test:contract
       - run: npm run build
       - run: npm run docs:generate
       - uses: actions/upload-artifact@v4
-        with: { name: coverage, path: coverage }
+        with:
+          name: coverage
+          path: coverage
   image:
     needs: verify
     if: github.event_name == 'push'
@@ -35,7 +67,10 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
-        with: { registry: ghcr.io, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }} }
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -47,5 +82,9 @@ jobs:
           provenance: mode=max
       - uses: sigstore/cosign-installer@v3
       - run: cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
-        env: { COSIGN_EXPERIMENTAL: "true" }
-      - run: helm lint helm/fileexpress && helm template fileexpress helm/fileexpress >/dev/null
+      - uses: azure/setup-helm@v4
+      - run: |
+          helm lint helm/fileexpress
+          helm template fileexpress helm/fileexpress --values helm/fileexpress/values-dev.yaml > /dev/null
+          helm lint helm/fileexpress-canary
+          helm template fileexpress helm/fileexpress-canary > /dev/null

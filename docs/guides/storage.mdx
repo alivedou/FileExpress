@@ -1,7 +1,82 @@
-# 存储后端 / Storage backends
+# 存储后端
 
-统一 `StorageBackend` 支持 local、S3、Azure Blob、数据库 BLOB 和 IPFS。云适配器通过 `StorageAdapters` 注入，注册表按 MIME/大小路由，并在每次失败时创建新流执行故障转移。
+## 统一接口
 
-Set `STORAGE_BACKEND` and comma-separated `STORAGE_BACKENDS`. Credentials belong in Kubernetes or CI secrets. S3 multipart parts are at least 5 MiB; failed transfers are aborted. Azure supports block blobs, immutable policies and CDN URL replacement. Database uploads use one transaction. IPFS uses content identifiers and pin metadata.
+所有后端实现 `StorageBackend`：初始化、流式上传下载、删除、存在性检查、预签名地址、分页列举和健康检查。`StorageRegistry` 负责默认后端、MIME/大小路由、配置脱敏、健康聚合及故障转移。
 
-迁移使用 `StorageMigrator`，先校验 SHA-256，再可选删除源对象；不要在校验失败时删除源数据。
+```dotenv
+STORAGE_BACKEND=local
+STORAGE_BACKENDS=local,s3,db
+```
+
+第一个变量选择默认类型，逗号列表启用额外后端。故障转移要求每次尝试都能创建全新的可读流；已经消费或销毁的流不会被重放。
+
+## 本地文件系统
+
+```dotenv
+STORAGE_BACKEND=local
+DATA_DIR=/data
+```
+
+对象写入临时文件后原子重命名，元数据单独保存。对象 ID 会经过路径包含检查，防止目录穿越。本地目录和 JSON 文件目录适合单进程或受控共享存储，不应把多个独立写副本当作高可用数据库。
+
+## S3 兼容存储
+
+```dotenv
+STORAGE_BACKEND=s3
+S3_BUCKET=fileexpress
+AWS_REGION=us-east-1
+S3_ENDPOINT=http://minio:9000
+S3_FORCE_PATH_STYLE=true
+AWS_ACCESS_KEY_ID=<由Secret注入>
+AWS_SECRET_ACCESS_KEY=<由Secret注入>
+```
+
+AWS S3 可省略 endpoint 和静态凭据，改用工作负载身份。MinIO、R2 与 GCS 兼容端点通常需要显式地址和路径风格。小对象有界缓冲，大对象使用至少 5 MiB 的分片；失败会中止 multipart upload。适配器保留版本 ID 并支持预签名下载/上传。
+
+生命周期规则应在云后端侧配置，例如临时对象 24 小时过期、未完成分片 1 天清理、隔离对象长期保留。应用删除与云生命周期必须分别验证。
+
+## Azure Blob
+
+```dotenv
+STORAGE_BACKEND=azure
+AZURE_CONTAINER=fileexpress
+AZURE_STORAGE_CONNECTION_STRING=<由Secret注入>
+AZURE_HIERARCHICAL_NAMESPACE=true
+AZURE_CDN_BASE_URL=https://cdn.example.test
+```
+
+大块文件使用 stage/commit block。不可变策略可由后端配置传入，CDN 只替换下载地址的源站部分。上传预签名仍直接指向 Blob 服务。删除不可变对象可能被服务拒绝，这是预期行为。
+
+## PostgreSQL BLOB
+
+```dotenv
+STORAGE_BACKEND=db
+DATABASE_URL=postgres://fileexpress:<secret>@postgres:5432/fileexpress
+DATABASE_OBJECT_TABLE=fileexpress_objects
+```
+
+对象元数据和分片在同一事务中写入，表名经过严格标识符校验。下载使用适配器提供的异步分片迭代，而不是一次性拼接全部 BLOB。元数据支持全文检索。生产环境必须单独备份数据库并测试事务恢复。
+
+## IPFS 与 Pin 服务
+
+```dotenv
+STORAGE_BACKEND=ipfs
+IPFS_API_URL=http://ipfs:5001
+IPFS_GATEWAY_URL=https://ipfs.example.test/ipfs
+IPFS_API_TOKEN=<由Secret注入>
+IPFS_PINNING_SERVICE_URL=https://pin.example.test
+IPFS_PINNING_SERVICE_TOKEN=<由Secret注入>
+```
+
+上传返回 CID，ID→CID 映射持久化到 `DATA_DIR/ipfs`。删除表示解除固定，不会从整个网络擦除已经复制的块。公共网关不会因 URL 附带应用签名自动执行鉴权；需要私有内容时使用受控签名代理，不要把普通网关链接误当作安全预签名。
+
+## 健康与迁移
+
+管理端注册配置后会立即执行健康检查。列表和日志中的凭据会脱敏。跨后端迁移使用 `StorageMigrator`，逐个流式复制并比较大小及 SHA-256；只有验证成功且显式设置 `deleteSource` 时才删除源对象。
+
+```bash
+npx tsx scripts/storage-migrate.ts
+```
+
+迁移前备份元数据，控制并发，记录失败对象，并避免在校验失败时清理源数据。

@@ -47,8 +47,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     MAX_STORAGE_HOURS: positiveInteger(env.MAX_STORAGE_HOURS, 24, "MAX_STORAGE_HOURS"),
     MAX_DOWNLOADS: positiveInteger(env.MAX_DOWNLOADS, 100, "MAX_DOWNLOADS"),
     LARGE_FILE_THRESHOLD_MB: positiveInteger(env.LARGE_FILE_THRESHOLD_MB, 100, "LARGE_FILE_THRESHOLD_MB"),
-    ...(env.STORAGE_ENCRYPTION_KEY === undefined ? {} : { STORAGE_ENCRYPTION_KEY: env.STORAGE_ENCRYPTION_KEY }),
-    ...(env.WEBHOOK_SIGNING_SECRET === undefined ? {} : { WEBHOOK_SIGNING_SECRET: env.WEBHOOK_SIGNING_SECRET }),
+    ...(env.STORAGE_ENCRYPTION_KEY === undefined
+      ? {}
+      : { STORAGE_ENCRYPTION_KEY: env.STORAGE_ENCRYPTION_KEY }),
+    ...(env.WEBHOOK_SIGNING_SECRET === undefined
+      ? {}
+      : { WEBHOOK_SIGNING_SECRET: env.WEBHOOK_SIGNING_SECRET }),
     ...(env.REDIS_URL === undefined ? {} : { REDIS_URL: env.REDIS_URL }),
     ...(env.DATABASE_URL === undefined ? {} : { DATABASE_URL: env.DATABASE_URL }),
     OTEL_SERVICE_NAME: nonEmpty(env.OTEL_SERVICE_NAME, "fileexpress", "OTEL_SERVICE_NAME"),
@@ -56,7 +60,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 }
 
 export function enabledStorageBackends(config: AppConfig): BackendKind[] {
-  const configured = config.STORAGE_BACKENDS?.split(",").map((item) => item.trim()).filter(Boolean) ?? [];
+  const configured =
+    config.STORAGE_BACKENDS?.split(",")
+      .map((item) => item.trim())
+      .filter(Boolean) ?? [];
   for (const item of configured) {
     if (!backends.includes(item as BackendKind)) throw new Error(`Invalid storage backend: ${item}`);
   }
@@ -77,5 +84,6 @@ function nonEmpty(value: string | undefined, fallback: string, name: string): st
 }
 
 function validateSecret(value: string | undefined, name: string): void {
-  if (value !== undefined && value.length < 32) throw new Error(`${name} must contain at least 32 characters`);
+  if (value !== undefined && value.length < 32)
+    throw new Error(`${name} must contain at least 32 characters`);
 }

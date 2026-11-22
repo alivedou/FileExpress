@@ -31,6 +31,9 @@ interface CreateResponse {
 
 interface StatusResponse {
   receivedChunks: number[];
+  chunkSize: number;
+  totalChunks: number;
+  totalSize: number;
 }
 
 export class ResumableChunkUploader {
@@ -54,11 +57,22 @@ export class ResumableChunkUploader {
   async start(existingUploadId?: string): Promise<ResumableUploadResult> {
     const fetcher = this.options.fetchImpl ?? fetch;
     const chunkSize = this.options.chunkSize ?? 8 * 1024 * 1024;
-    const created = existingUploadId
-      ? { uploadId: existingUploadId, chunkSize, totalChunks: Math.ceil(this.options.file.size / chunkSize) }
-      : await this.createSession(fetcher, chunkSize);
-    const completed = await this.receivedChunks(fetcher, created.uploadId);
-    let uploadedBytes = completed.reduce((total, index) => total + this.chunkSize(index, created.chunkSize), 0);
+    let created: CreateResponse;
+    let completed: number[];
+    if (existingUploadId) {
+      const status = await this.uploadStatus(fetcher, existingUploadId);
+      if (status.totalSize !== this.options.file.size)
+        throw new Error("Upload session belongs to a different file");
+      created = { uploadId: existingUploadId, chunkSize: status.chunkSize, totalChunks: status.totalChunks };
+      completed = status.receivedChunks;
+    } else {
+      created = await this.createSession(fetcher, chunkSize);
+      completed = (await this.uploadStatus(fetcher, created.uploadId)).receivedChunks;
+    }
+    let uploadedBytes = completed.reduce(
+      (total, index) => total + this.chunkSize(index, created.chunkSize),
+      0,
+    );
     let activeChunks = 0;
     const pending = Array.from({ length: created.totalChunks }, (_, index) => index).filter(
       (index) => !completed.includes(index),
@@ -106,13 +120,29 @@ export class ResumableChunkUploader {
     return (await response.json()) as CreateResponse;
   }
 
-  private async receivedChunks(fetcher: typeof fetch, uploadId: string): Promise<number[]> {
+  private async uploadStatus(fetcher: typeof fetch, uploadId: string): Promise<StatusResponse> {
     const response = await fetcher(`/api/upload/chunks/${uploadId}`, { signal: this.options.signal });
     if (!response.ok) throw new Error(`Unable to restore upload: ${response.status}`);
-    return ((await response.json()) as StatusResponse).receivedChunks;
+    const status = (await response.json()) as StatusResponse;
+    if (
+      !Number.isSafeInteger(status.chunkSize) ||
+      status.chunkSize <= 0 ||
+      !Number.isSafeInteger(status.totalChunks) ||
+      status.totalChunks <= 0 ||
+      !Number.isSafeInteger(status.totalSize) ||
+      status.totalSize < 0 ||
+      !Array.isArray(status.receivedChunks)
+    )
+      throw new Error("Invalid upload session response");
+    return status;
   }
 
-  private async uploadWithRetry(fetcher: typeof fetch, uploadId: string, index: number, chunkSize: number): Promise<void> {
+  private async uploadWithRetry(
+    fetcher: typeof fetch,
+    uploadId: string,
+    index: number,
+    chunkSize: number,
+  ): Promise<void> {
     const retries = this.options.retries ?? 3;
     let lastError: unknown;
     for (let attempt = 0; attempt <= retries; attempt += 1) {

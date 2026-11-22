@@ -1,0 +1,2445 @@
+"openapi": "3.1.0"
+"jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema"
+"info":
+  "title": "FileExpress Enterprise API"
+  "version": "2.0.0"
+  "description": "Multi-tenant file transfer, resumable upload, storage, security, DRM and operations API."
+  "license":
+    "name": "UNLICENSED"
+"servers":
+  - "url": "/"
+    "description": "Current FileExpress origin"
+"tags":
+  - "name": "System"
+  - "name": "Public transfer"
+  - "name": "Resumable upload"
+  - "name": "Security"
+  - "name": "Administration"
+  - "name": "Webhooks"
+  - "name": "Tenancy"
+  - "name": "DRM"
+  - "name": "Audit"
+  - "name": "Observability"
+"paths":
+  "/api/config":
+    "get":
+      "operationId": "getApiConfig"
+      "summary": "Read public application limits and branding"
+      "tags":
+        - "System"
+      "parameters": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "appName": "File Express"
+                    "maxChunkSizeMB": 8
+                    "maxStorageHours": 24
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "appName": "File Express"
+              "maxChunkSizeMB": 8
+              "maxStorageHours": 24
+  "/api/health":
+    "get":
+      "operationId": "getApiHealth"
+      "summary": "Read legacy liveness information"
+      "tags":
+        - "System"
+      "parameters": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "status": "ok"
+                    "mode": "local"
+                    "timestamp": "2026-11-22T00:00:00.000Z"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "status": "ok"
+              "mode": "local"
+              "timestamp": "2026-11-22T00:00:00.000Z"
+  "/api/upload/public":
+    "post":
+      "operationId": "postApiUploadPublic"
+      "summary": "Upload a public text document"
+      "tags":
+        - "Public transfer"
+      "parameters": []
+      "requestBody":
+        "required": true
+        "content":
+          "multipart/form-data":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "title": "release-notes"
+                  "content": "FileExpress 2.0"
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "success": true
+                    "id": "pub_release-notes.txt"
+                    "url": "/view/pub_release-notes.txt"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "title": "release-notes"
+              "content": "FileExpress 2.0"
+            "response":
+              "success": true
+              "id": "pub_release-notes.txt"
+              "url": "/view/pub_release-notes.txt"
+  "/api/upload/private":
+    "post":
+      "operationId": "postApiUploadPrivate"
+      "summary": "Upload small private files through the compatibility API"
+      "tags":
+        - "Public transfer"
+      "parameters": []
+      "requestBody":
+        "required": true
+        "content":
+          "multipart/form-data":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "files":
+                    - "<binary>"
+                  "duration": 24
+                  "maxDownloads": 5
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "success": true
+                    "pickupCode": "123456"
+                    "expiresAt": "2026-11-23T00:00:00.000Z"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "files":
+                - "<binary>"
+              "duration": 24
+              "maxDownloads": 5
+            "response":
+              "success": true
+              "pickupCode": "123456"
+              "expiresAt": "2026-11-23T00:00:00.000Z"
+  "/api/batch-upload":
+    "post":
+      "operationId": "postApiBatchUpload"
+      "summary": "Upload one public text file for script clients"
+      "tags":
+        - "Public transfer"
+      "parameters": []
+      "requestBody":
+        "required": true
+        "content":
+          "multipart/form-data":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "file": "<binary text>"
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value": "上传成功。访问链接: https://files.example.test/view/pub_notes.txt"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "file": "<binary text>"
+            "response": "上传成功。访问链接: https://files.example.test/view/pub_notes.txt"
+  "/api/extract":
+    "post":
+      "operationId": "postApiExtract"
+      "summary": "Resolve a six-digit pickup code"
+      "tags":
+        - "Public transfer"
+      "parameters": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "code": "123456"
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "success": true
+                    "fileName": "video.mp4"
+                    "scanStatus": "clean"
+                    "downloadUrl": "/api/download/123456"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "code": "123456"
+            "response":
+              "success": true
+              "fileName": "video.mp4"
+              "scanStatus": "clean"
+              "downloadUrl": "/api/download/123456"
+  "/api/download/{code}":
+    "get":
+      "operationId": "getApiDownloadCode"
+      "summary": "Stream an authorised private file"
+      "tags":
+        - "Public transfer"
+      "parameters":
+        - "name": "code"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers":
+            "X-Content-SHA256":
+              "schema":
+                "type": "string"
+              "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "content":
+            "application/octet-stream":
+              "schema":
+                "type": "string"
+                "format": "binary"
+              "examples":
+                "success":
+                  "value":
+                    "contentType": "video/mp4"
+                    "headers":
+                      "X-Content-SHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    "body": "<binary stream>"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "code": "123456"
+              "headers":
+                "X-Device-Id": "device-1234"
+            "response":
+              "contentType": "video/mp4"
+              "headers":
+                "X-Content-SHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "body": "<binary stream>"
+  "/api/view/{id}":
+    "get":
+      "operationId": "getApiViewId"
+      "summary": "Read an unexpired public text document"
+      "tags":
+        - "Public transfer"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "content": "FileExpress 2.0"
+                    "fileName": "notes.txt"
+                    "createdAt": "2026-11-22T00:00:00.000Z"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "pub_notes.txt"
+            "response":
+              "content": "FileExpress 2.0"
+              "fileName": "notes.txt"
+              "createdAt": "2026-11-22T00:00:00.000Z"
+  "/api/files/public":
+    "get":
+      "operationId": "getApiFilesPublic"
+      "summary": "List the latest public documents"
+      "tags":
+        - "Public transfer"
+      "parameters": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    - "id": "pub_notes.txt"
+                      "fileName": "notes.txt"
+                      "expiryDate": "2026-11-25T00:00:00.000Z"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              - "id": "pub_notes.txt"
+                "fileName": "notes.txt"
+                "expiryDate": "2026-11-25T00:00:00.000Z"
+  "/api/upload/tus":
+    "options":
+      "operationId": "optionsApiUploadTus"
+      "summary": "Discover Tus 1.0.0 protocol capabilities"
+      "tags":
+        - "Resumable upload"
+      "parameters": []
+      "responses":
+        "204":
+          "description": "Successful operation"
+          "headers":
+            "Tus-Resumable":
+              "schema":
+                "type": "string"
+              "example": "1.0.0"
+            "Tus-Extension":
+              "schema":
+                "type": "string"
+              "example": "creation,termination,expiration"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "headers":
+                "Tus-Resumable": "1.0.0"
+                "Tus-Extension": "creation,termination,expiration"
+    "post":
+      "operationId": "postApiUploadTus"
+      "summary": "Create a Tus 1.0.0 resumable upload"
+      "tags":
+        - "Resumable upload"
+      "parameters": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "headers":
+                    "Tus-Resumable": "1.0.0"
+                    "Upload-Length": 524288000
+                    "Upload-Metadata": "filename dmlkZW8ubXA0,filetype dmlkZW8vbXA0"
+      "responses":
+        "201":
+          "description": "Successful operation"
+          "headers":
+            "Location":
+              "schema":
+                "type": "string"
+              "example": "/api/upload/tus/9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "headers":
+                      "Location": "/api/upload/tus/9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "headers":
+                "Tus-Resumable": "1.0.0"
+                "Upload-Length": 524288000
+                "Upload-Metadata": "filename dmlkZW8ubXA0,filetype dmlkZW8vbXA0"
+            "response":
+              "headers":
+                "Location": "/api/upload/tus/9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+  "/api/upload/tus/{id}":
+    "options":
+      "operationId": "optionsApiUploadTusId"
+      "summary": "Discover capabilities for an existing Tus upload"
+      "tags":
+        - "Resumable upload"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "responses":
+        "204":
+          "description": "Successful operation"
+          "headers": {}
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+            "response": {}
+    "head":
+      "operationId": "headApiUploadTusId"
+      "summary": "Read the current resumable offset"
+      "tags":
+        - "Resumable upload"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers":
+            "Upload-Offset":
+              "schema":
+                "type": "string"
+              "example": "8388608"
+            "Upload-Length":
+              "schema":
+                "type": "string"
+              "example": "524288000"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+              "headers":
+                "Tus-Resumable": "1.0.0"
+            "response":
+              "headers":
+                "Upload-Offset": 8388608
+                "Upload-Length": 524288000
+    "patch":
+      "operationId": "patchApiUploadTusId"
+      "summary": "Append bytes at the current offset"
+      "tags":
+        - "Resumable upload"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "requestBody":
+        "required": true
+        "content":
+          "application/offset+octet-stream":
+            "schema":
+              "type": "string"
+              "format": "binary"
+            "examples":
+              "request":
+                "value":
+                  "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+                  "headers":
+                    "Upload-Offset": 0
+                    "Tus-Resumable": "1.0.0"
+                  "body": "<binary>"
+      "responses":
+        "204":
+          "description": "Successful operation"
+          "headers":
+            "Upload-Offset":
+              "schema":
+                "type": "string"
+              "example": "8388608"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+              "headers":
+                "Upload-Offset": 0
+                "Tus-Resumable": "1.0.0"
+              "body": "<binary>"
+            "response":
+              "headers":
+                "Upload-Offset": 8388608
+    "delete":
+      "operationId": "deleteApiUploadTusId"
+      "summary": "Terminate a Tus upload and remove temporary data"
+      "tags":
+        - "Resumable upload"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "responses":
+        "204":
+          "description": "Successful operation"
+          "headers": {}
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+            "response": {}
+  "/api/upload/chunks":
+    "post":
+      "operationId": "postApiUploadChunks"
+      "summary": "Create a concurrent chunked upload"
+      "tags":
+        - "Resumable upload"
+      "parameters": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "fileName": "video.mp4"
+                  "mimeType": "video/mp4"
+                  "totalSize": 524288000
+                  "chunkSize": 8388608
+      "responses":
+        "201":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "uploadId": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+                    "totalChunks": 63
+                    "chunkSize": 8388608
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "fileName": "video.mp4"
+              "mimeType": "video/mp4"
+              "totalSize": 524288000
+              "chunkSize": 8388608
+            "response":
+              "uploadId": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+              "totalChunks": 63
+              "chunkSize": 8388608
+  "/api/upload/chunks/{id}":
+    "get":
+      "operationId": "getApiUploadChunksId"
+      "summary": "Restore the list of verified chunks"
+      "tags":
+        - "Resumable upload"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "uploadId": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+                    "receivedChunks":
+                      - 0
+                      - 1
+                      - 2
+                    "totalChunks": 63
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+            "response":
+              "uploadId": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+              "receivedChunks":
+                - 0
+                - 1
+                - 2
+              "totalChunks": 63
+    "delete":
+      "operationId": "deleteApiUploadChunksId"
+      "summary": "Discard a chunked upload"
+      "tags":
+        - "Resumable upload"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "responses":
+        "204":
+          "description": "Successful operation"
+          "headers": {}
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+            "response": {}
+  "/api/upload/chunks/{id}/{index}":
+    "put":
+      "operationId": "putApiUploadChunksIdIndex"
+      "summary": "Upload one SHA-256 verified chunk"
+      "tags":
+        - "Resumable upload"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+        - "name": "index"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "requestBody":
+        "required": true
+        "content":
+          "application/octet-stream":
+            "schema":
+              "type": "string"
+              "format": "binary"
+            "examples":
+              "request":
+                "value":
+                  "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+                  "index": 0
+                  "headers":
+                    "X-Chunk-SHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                  "body": "<binary>"
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "index": 0
+                    "size": 8388608
+                    "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+              "index": 0
+              "headers":
+                "X-Chunk-SHA256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "body": "<binary>"
+            "response":
+              "index": 0
+              "size": 8388608
+              "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  "/api/upload/chunks/{id}/complete":
+    "post":
+      "operationId": "postApiUploadChunksIdComplete"
+      "summary": "Merge chunks and persist the file to a routed backend"
+      "tags":
+        - "Resumable upload"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+                  "finalChecksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "uploadId": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+                    "size": 524288000
+                    "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    "pickupCode": "123456"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+              "finalChecksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "response":
+              "uploadId": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+              "size": 524288000
+              "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "pickupCode": "123456"
+  "/api/webhook/virustotal":
+    "post":
+      "operationId": "postApiWebhookVirustotal"
+      "summary": "Receive a signed VirusTotal analysis callback"
+      "tags":
+        - "Security"
+      "parameters": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "headers":
+                    "X-VirusTotal-Timestamp": "1767225600"
+                    "X-VirusTotal-Signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                  "data":
+                    "id": "analysis-id"
+                    "attributes":
+                      "status": "completed"
+                      "stats":
+                        "malicious": 0
+                  "meta":
+                    "file_info":
+                      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "responses":
+        "202":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "accepted": true
+                    "result":
+                      "engine": "virustotal"
+                      "verdict": "clean"
+                      "details": []
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "headers":
+                "X-VirusTotal-Timestamp": "1767225600"
+                "X-VirusTotal-Signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "data":
+                "id": "analysis-id"
+                "attributes":
+                  "status": "completed"
+                  "stats":
+                    "malicious": 0
+              "meta":
+                "file_info":
+                  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "response":
+              "accepted": true
+              "result":
+                "engine": "virustotal"
+                "verdict": "clean"
+                "details": []
+  "/health/live":
+    "get":
+      "operationId": "getHealthLive"
+      "summary": "Kubernetes liveness probe"
+      "tags":
+        - "System"
+      "parameters": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "status": "ok"
+                    "alive": true
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "status": "ok"
+              "alive": true
+  "/health/ready":
+    "get":
+      "operationId": "getHealthReady"
+      "summary": "Kubernetes readiness with every enabled backend"
+      "tags":
+        - "System"
+      "parameters": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "status": "ready"
+                    "healthy": true
+                    "backends":
+                      - "backend": "local"
+                        "kind": "local"
+                        "healthy": true
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "status": "ready"
+              "healthy": true
+              "backends":
+                - "backend": "local"
+                  "kind": "local"
+                  "healthy": true
+  "/metrics":
+    "get":
+      "operationId": "getMetrics"
+      "summary": "Prometheus text exposition"
+      "tags":
+        - "System"
+      "parameters": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "text/plain; version=0.0.4":
+              "schema": {}
+              "examples":
+                "success":
+                  "value": "http_req_duration_seconds_bucket{le=\"1\"} 42"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response": "http_req_duration_seconds_bucket{le=\"1\"} 42"
+  "/api/admin/storage":
+    "get":
+      "operationId": "getApiAdminStorage"
+      "summary": "List redacted backend configurations and health"
+      "tags":
+        - "Administration"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items":
+                      - "name": "s3"
+                        "kind": "s3"
+                        "options":
+                          "secretAccessKey": "[REDACTED]"
+                    "health":
+                      - "backend": "s3"
+                        "healthy": true
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "headers":
+                "Authorization": "Bearer <admin-token>"
+                "X-Tenant-Id": "team-a"
+            "response":
+              "items":
+                - "name": "s3"
+                  "kind": "s3"
+                  "options":
+                    "secretAccessKey": "[REDACTED]"
+              "health":
+                - "backend": "s3"
+                  "healthy": true
+    "post":
+      "operationId": "postApiAdminStorage"
+      "summary": "Register and test a storage backend"
+      "tags":
+        - "Administration"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "name": "s3"
+                  "kind": "s3"
+                  "enabled": true
+                  "priority": 1
+                  "options":
+                    "bucket": "fileexpress"
+                    "region": "us-east-1"
+                    "secretAccessKey": "<secret>"
+      "responses":
+        "201":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "health":
+                      "backend": "s3"
+                      "healthy": true
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "name": "s3"
+              "kind": "s3"
+              "enabled": true
+              "priority": 1
+              "options":
+                "bucket": "fileexpress"
+                "region": "us-east-1"
+                "secretAccessKey": "<secret>"
+            "response":
+              "health":
+                "backend": "s3"
+                "healthy": true
+  "/api/admin/security":
+    "get":
+      "operationId": "getApiAdminSecurity"
+      "summary": "Read scanner versions, health and queue depth"
+      "tags":
+        - "Security"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items":
+                      - "id": "clamav-daemon"
+                        "healthy": true
+                        "signatureVersion": "ClamAV 1.4"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "items":
+                - "id": "clamav-daemon"
+                  "healthy": true
+                  "signatureVersion": "ClamAV 1.4"
+    "post":
+      "operationId": "postApiAdminSecurity"
+      "summary": "Scan an existing file inside DATA_DIR"
+      "tags":
+        - "Security"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "filePath": "/data/uploads/example.bin"
+                  "id": "example"
+                  "mimeType": "application/octet-stream"
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "fileId": "example"
+                    "verdict": "clean"
+                    "action": "accept"
+                    "results": []
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "filePath": "/data/uploads/example.bin"
+              "id": "example"
+              "mimeType": "application/octet-stream"
+            "response":
+              "fileId": "example"
+              "verdict": "clean"
+              "action": "accept"
+              "results": []
+  "/api/admin/webhooks":
+    "get":
+      "operationId": "getApiAdminWebhooks"
+      "summary": "List tenant endpoints and delivery history"
+      "tags":
+        - "Webhooks"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items": []
+                    "history": []
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "query":
+                "tenantId": "team-a"
+            "response":
+              "items": []
+              "history": []
+    "post":
+      "operationId": "postApiAdminWebhooks"
+      "summary": "Create an HMAC-signed webhook endpoint"
+      "tags":
+        - "Webhooks"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "tenantId": "team-a"
+                  "url": "https://hooks.example.test/fileexpress"
+                  "secret": "<secret>"
+                  "events":
+                    - "file.uploaded"
+                    - "file.scanned"
+                  "enabled": true
+      "responses":
+        "201":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+                    "secret": "[REDACTED]"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "tenantId": "team-a"
+              "url": "https://hooks.example.test/fileexpress"
+              "secret": "<secret>"
+              "events":
+                - "file.uploaded"
+                - "file.scanned"
+              "enabled": true
+            "response":
+              "id": "9b7d2a4e-0e6c-4df0-a9b0-72d6240e56e8"
+              "secret": "[REDACTED]"
+  "/api/admin/teams":
+    "get":
+      "operationId": "getApiAdminTeams"
+      "summary": "List teams in the authorised hierarchy"
+      "tags":
+        - "Tenancy"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items":
+                      - "id": "team-a"
+                        "name": "Team A"
+                        "quotaBytes": 107374182400
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "items":
+                - "id": "team-a"
+                  "name": "Team A"
+                  "quotaBytes": 107374182400
+    "post":
+      "operationId": "postApiAdminTeams"
+      "summary": "Create a team with branding and quota"
+      "tags":
+        - "Tenancy"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "id": "team-a"
+                  "name": "Team A"
+                  "quotaBytes": 107374182400
+                  "branding":
+                    "primaryColor": "#06b6d4"
+      "responses":
+        "201":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "id": "team-a"
+                    "name": "Team A"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "team-a"
+              "name": "Team A"
+              "quotaBytes": 107374182400
+              "branding":
+                "primaryColor": "#06b6d4"
+            "response":
+              "id": "team-a"
+              "name": "Team A"
+  "/api/admin/roles":
+    "get":
+      "operationId": "getApiAdminRoles"
+      "summary": "List builtin and custom role permissions"
+      "tags":
+        - "Tenancy"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items":
+                      - "name": "Owner"
+                        "permissions":
+                          - "storage.read"
+                          - "team.manage"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "items":
+                - "name": "Owner"
+                  "permissions":
+                    - "storage.read"
+                    - "team.manage"
+    "post":
+      "operationId": "postApiAdminRoles"
+      "summary": "Define a custom tenant role"
+      "tags":
+        - "Tenancy"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "name": "Auditor"
+                  "tenantId": "team-a"
+                  "inherits":
+                    - "Viewer"
+                  "permissions":
+                    - "audit.read"
+      "responses":
+        "201":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "saved": true
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "name": "Auditor"
+              "tenantId": "team-a"
+              "inherits":
+                - "Viewer"
+              "permissions":
+                - "audit.read"
+            "response":
+              "saved": true
+  "/api/admin/api-keys":
+    "get":
+      "operationId": "getApiAdminApiKeys"
+      "summary": "List API keys without secret hashes"
+      "tags":
+        - "Tenancy"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items":
+                      - "id": "key-id"
+                        "prefix": "fe_abcd"
+                        "revoked": false
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "query":
+                "tenantId": "team-a"
+            "response":
+              "items":
+                - "id": "key-id"
+                  "prefix": "fe_abcd"
+                  "revoked": false
+    "post":
+      "operationId": "postApiAdminApiKeys"
+      "summary": "Issue a scoped API key and reveal its secret once"
+      "tags":
+        - "Tenancy"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "name": "CI uploader"
+                  "scope":
+                    "tenantId": "team-a"
+                    "permissions":
+                      - "storage.write"
+                    "requestsPerMinute": 60
+                    "expiresAt": "2027-01-01T00:00:00.000Z"
+      "responses":
+        "201":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "secret": "fe_<reveal-once>"
+                    "record":
+                      "id": "key-id"
+                      "revoked": false
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "name": "CI uploader"
+              "scope":
+                "tenantId": "team-a"
+                "permissions":
+                  - "storage.write"
+                "requestsPerMinute": 60
+                "expiresAt": "2027-01-01T00:00:00.000Z"
+            "response":
+              "secret": "fe_<reveal-once>"
+              "record":
+                "id": "key-id"
+                "revoked": false
+  "/api/admin/api-keys/{id}":
+    "delete":
+      "operationId": "deleteApiAdminApiKeysId"
+      "summary": "Revoke an API key in the same tenant"
+      "tags":
+        - "Tenancy"
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "204":
+          "description": "Successful operation"
+          "headers": {}
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "key-id"
+            "response": {}
+  "/api/admin/drm":
+    "get":
+      "operationId": "getApiAdminDrm"
+      "summary": "List DRM policy templates"
+      "tags":
+        - "DRM"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items":
+                      - "id": "read-only"
+                        "allowedActions":
+                          - "view"
+                        "watermarkDensity": "high"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "items":
+                - "id": "read-only"
+                  "allowedActions":
+                    - "view"
+                  "watermarkDensity": "high"
+    "post":
+      "operationId": "postApiAdminDrm"
+      "summary": "Bind a DRM policy template"
+      "tags":
+        - "DRM"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "id": "read-only"
+                  "tenantId": "team-a"
+                  "name": "Read only"
+                  "allowedActions":
+                    - "view"
+                  "allowedIps":
+                    - "*"
+                  "allowedDevices": []
+                  "mimePatterns": []
+                  "userIds": []
+                  "visibleWatermark": true
+                  "invisibleWatermark": true
+                  "watermarkDensity": "high"
+                  "destructAfterExpiry": false
+      "responses":
+        "201":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "saved": true
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "id": "read-only"
+              "tenantId": "team-a"
+              "name": "Read only"
+              "allowedActions":
+                - "view"
+              "allowedIps":
+                - "*"
+              "allowedDevices": []
+              "mimePatterns": []
+              "userIds": []
+              "visibleWatermark": true
+              "invisibleWatermark": true
+              "watermarkDensity": "high"
+              "destructAfterExpiry": false
+            "response":
+              "saved": true
+  "/api/admin/audit":
+    "get":
+      "operationId": "getApiAdminAudit"
+      "summary": "Search, verify or export the signed audit chain"
+      "tags":
+        - "Audit"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items":
+                      - "id": 1
+                        "action": "admin.post"
+                        "outcome": "success"
+                        "previousHash": "0000000000000000000000000000000000000000000000000000000000000000"
+                    "chainValid": true
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "query":
+                "tenantId": "team-a"
+                "text": "storage"
+                "format": "jsonl"
+                "limit": 100
+            "response":
+              "items":
+                - "id": 1
+                  "action": "admin.post"
+                  "outcome": "success"
+                  "previousHash": "0000000000000000000000000000000000000000000000000000000000000000"
+              "chainValid": true
+  "/api/admin/monitoring":
+    "get":
+      "operationId": "getApiAdminMonitoring"
+      "summary": "Read alert history and current metrics"
+      "tags":
+        - "Observability"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "items":
+                      - "rule": "ScanQueueDepth"
+                        "active": false
+                    "metrics": "scan_queue_depth 0"
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request": {}
+            "response":
+              "items":
+                - "rule": "ScanQueueDepth"
+                  "active": false
+              "metrics": "scan_queue_depth 0"
+    "post":
+      "operationId": "postApiAdminMonitoring"
+      "summary": "Silence an alert rule until a timestamp"
+      "tags":
+        - "Observability"
+      "parameters": []
+      "security":
+        - "bearerAuth": []
+        - "apiKeyAuth": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "additionalProperties": true
+            "examples":
+              "request":
+                "value":
+                  "rule": "ScanQueueDepth"
+                  "until": "2026-11-23T00:00:00.000Z"
+      "responses":
+        "200":
+          "description": "Successful operation"
+          "headers": {}
+          "content":
+            "application/json":
+              "schema": {}
+              "examples":
+                "success":
+                  "value":
+                    "saved": true
+        "400":
+          "description": "Invalid request"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "INVALID_REQUEST"
+        "401":
+          "description": "Authentication required"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "UNAUTHENTICATED"
+        "403":
+          "description": "Permission or tenant scope denied"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/Error"
+              "example":
+                "error": "FORBIDDEN"
+      "x-codeSamples":
+        - "lang": "json"
+          "label": "Request and response"
+          "source":
+            "request":
+              "rule": "ScanQueueDepth"
+              "until": "2026-11-23T00:00:00.000Z"
+            "response":
+              "saved": true
+"components":
+  "securitySchemes":
+    "bearerAuth":
+      "type": "http"
+      "scheme": "bearer"
+      "bearerFormat": "opaque"
+    "apiKeyAuth":
+      "type": "apiKey"
+      "in": "header"
+      "name": "X-API-Key"
+  "schemas":
+    "Error":
+      "type": "object"
+      "required":
+        - "error"
+      "properties":
+        "error":
+          "type": "string"
+          "description": "Stable human-readable error detail"
+    "UploadSession":
+      "type": "object"
+      "required":
+        - "uploadId"
+        - "chunkSize"
+        - "totalChunks"
+        - "expiresAt"
+      "properties":
+        "uploadId":
+          "type": "string"
+          "format": "uuid"
+        "chunkSize":
+          "type": "integer"
+          "minimum": 1
+        "totalChunks":
+          "type": "integer"
+          "minimum": 1
+        "expiresAt":
+          "type": "string"
+          "format": "date-time"
+    "StorageHealth":
+      "type": "object"
+      "required":
+        - "backend"
+        - "kind"
+        - "healthy"
+        - "latencyMs"
+        - "checkedAt"
+      "properties":
+        "backend":
+          "type": "string"
+        "kind":
+          "type": "string"
+          "enum":
+            - "local"
+            - "s3"
+            - "azure"
+            - "db"
+            - "ipfs"
+        "healthy":
+          "type": "boolean"
+        "latencyMs":
+          "type": "number"
+          "minimum": 0
+        "checkedAt":
+          "type": "string"
+          "format": "date-time"
+    "WebhookEvent":
+      "type": "object"
+      "required":
+        - "id"
+        - "type"
+        - "tenantId"
+        - "occurredAt"
+        - "idempotencyKey"
+        - "data"
+      "properties":
+        "id":
+          "type": "string"
+          "format": "uuid"
+        "type":
+          "type": "string"
+          "enum":
+            - "file.uploaded"
+            - "file.downloaded"
+            - "file.expired"
+            - "file.scanned"
+            - "scan.completed"
+            - "scan.threat_detected"
+            - "scan.error"
+            - "storage.quota_warning"
+            - "storage.backend_failed"
+        "tenantId":
+          "type": "string"
+        "occurredAt":
+          "type": "string"
+          "format": "date-time"
+        "idempotencyKey":
+          "type": "string"
+        "data":
+          "type": "object"
+          "additionalProperties": true

@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: fileexpress-error-rate
+spec:
+  metrics:
+    - name: error-rate-below-two-percent
+      interval: 30s
+      count: 3
+      failureLimit: 1
+      successCondition: "len(result) > 0 && result[0] < 2"
+      failureCondition: "len(result) > 0 && result[0] >= 2"
+      provider:
+        prometheus:
+          address: "{{ .Values.monitoring.prometheusUrl }}"
+          query: |
+            100 * sum(rate(errors_total[5m])) / clamp_min(sum(rate(http_req_duration_seconds_count[5m])), 0.001)

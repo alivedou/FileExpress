@@ -1,0 +1,17 @@
+# FileExpress 企业文件传输平台
+
+FileExpress 将临时文件分享扩展为多租户传输平台，提供本地与云对象存储、Tus 和并发分片续传、异步内容扫描、数字水印、DRM、可靠 Webhook、RBAC、签名审计链和云原生运维能力。
+
+## 选择入口
+
+- [快速开始](./guides/quick-start)：本地启动、密钥注入和第一次上传。
+- [存储后端](./guides/storage)：S3、Azure、PostgreSQL BLOB 与 IPFS。
+- [大文件续传](./guides/uploads)：恢复上传、校验和及暂停继续。
+- [扫描与 DRM](./guides/security-drm)：隔离区、策略和水印边界。
+- [Webhook 与 RBAC](./guides/webhooks-rbac)：可靠事件和租户授权。
+- [部署](./guides/deployment)：Helm、ArgoCD、Canary 与回滚。
+- [API 文档](/api-docs)：42 个带请求和响应示例的接口操作。
+
+## 安全边界
+
+“扫描通过”不等于文件绝对安全；水印不能阻止拍照或已授权内容外发；浏览器无法真正禁止截屏。生产部署必须注入独立随机密钥、限制管理网络、启用传输加密，并定期验证审计链和恢复流程。

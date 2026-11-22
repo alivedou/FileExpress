@@ -1,0 +1,73 @@
+# 部署与 GitOps
+
+## 镜像
+
+```bash
+docker build -t fileexpress:test .
+docker run --rm -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e STORAGE_ENCRYPTION_KEY="$STORAGE_ENCRYPTION_KEY" \
+  -e WEBHOOK_SIGNING_SECRET="$WEBHOOK_SIGNING_SECRET" \
+  -e ADMIN_API_TOKEN="$ADMIN_API_TOKEN" \
+  -v fileexpress-data:/data \
+  fileexpress:test
+```
+
+镜像使用多阶段构建和非 root 用户。不要把秘密写入 Dockerfile、镜像层或 values 文件。容器内 `PORT` 与端口映射必须一致。
+
+## Helm
+
+Chart 包含 Deployment、Service、ConfigMap、Secret 引用、PVC、HPA、VPA、PodMonitor 和 NetworkPolicy。
+
+```bash
+helm lint helm/fileexpress
+helm template fileexpress helm/fileexpress \
+  --values helm/fileexpress/values-dev.yaml > /tmp/fileexpress.yaml
+helm upgrade --install fileexpress-dev helm/fileexpress \
+  --namespace fileexpress-dev --create-namespace \
+  --values helm/fileexpress/values-dev.yaml \
+  --set secrets.existingSecret=fileexpress-runtime \
+  --wait --timeout 10m
+```
+
+提前创建 `fileexpress-runtime`，至少包含 `STORAGE_ENCRYPTION_KEY`、`WEBHOOK_SIGNING_SECRET` 和 `ADMIN_API_TOKEN`。Secret 清单只支持引用或占位，不应提交真实值。
+
+只读根文件系统通过 `/data` 和 `/tmp` 卷提供可写路径。使用本地后端时确认 PVC 访问模式与副本数兼容；ReadWriteOnce 卷不能被所有节点上的多个写副本共享。
+
+## 探针与资源
+
+readiness 检查全部后端，liveness 只检查进程。HPA 根据 CPU 扩缩容，VPA 提供资源建议。启用 VPA 前确认集群已安装对应 CRD，否则只渲染 Helm 不会创建该资源。
+
+NetworkPolicy 默认限制入口，需按实际命名空间放行 Ingress 和监控。出口还应根据 S3、PostgreSQL、Kafka、Redis、OTel 和扫描服务地址细化。
+
+## ArgoCD
+
+`argo-apps/applicationset.yaml` 为 dev、staging、prod 生成应用，开启自动同步和修剪。先检查目标集群、命名空间和仓库凭据，再提交 ApplicationSet。
+
+```bash
+argocd app get fileexpress-prod
+argocd app sync fileexpress-prod
+argocd app wait fileexpress-prod --health --sync
+```
+
+`Synced` 只说明期望状态已应用，`Healthy` 也不替代业务验收。必须额外验证上传、下载、扫描和审计。
+
+## Canary 与回滚
+
+CD 在 prod 使用 10%→50%→100% 的 Canary 步骤，失败时执行 Helm rollback。真实 Canary 需要支持权重的 Ingress/Service Mesh 和独立工作负载，单纯调整同一个 Deployment 的副本不会形成可靠流量权重。
+
+自动回滚阈值使用错误率超过 2% 等指标，数据应来自 Prometheus。没有指标或指标异常时应停止发布，而不是默认通过。
+
+## 供应链
+
+CI 构建多架构镜像，生成 SBOM 和 Provenance，再使用 cosign keyless 签名。部署前验证 digest、证书身份和 OIDC issuer。不要只验证可变 tag。
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/alivedou/FileExpress/.github/workflows/ci.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/alivedou/fileexpress@sha256:<digest>
+cosign download sbom ghcr.io/alivedou/fileexpress@sha256:<digest>
+```
+
+签名验证需要真实 CI OIDC 身份和已发布镜像，本地文件无法单独证明。

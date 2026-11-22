@@ -1,0 +1,60 @@
+# Troubleshooting
+
+## Service does not start
+
+Production refuses to start without `STORAGE_ENCRYPTION_KEY` or `WEBHOOK_SIGNING_SECRET`. Check Secret names, keys and mounts without printing real values.
+
+Incomplete cloud configuration also fails readiness. Check S3 bucket, endpoint, region and identity; Azure connection string and container; database URL and migration permissions; IPFS API address and mapping directory.
+
+## Upload returns 409 or 422
+
+- Tus 409: client and server offsets differ; issue HEAD before retrying.
+- Chunk 409: chunks are missing, an index conflicts or session state rejects the operation.
+- 422: chunk or final SHA-256 mismatch; reread the original slice and recalculate.
+- 410: the session expired; create a new one instead of reusing old temporary data.
+
+Repeated completion must return the same pickup code. Otherwise inspect session persistence and accidental removal of completion state.
+
+## Upload succeeds but download fails
+
+The enterprise catalog allows only `clean`. Inspect `scanStatus` from `/api/extract`:
+
+- `pending`: queued or awaiting review.
+- `error`: engine or callback failure; inspect engine health.
+- `quarantined`: threat detected; follow the quarantine process.
+- Missing: wrong code, expired file or exhausted downloads.
+
+Also verify that the actual backend in the catalog is healthy and that an external lifecycle rule has not deleted the object early.
+
+## ClamAV, YARA or VirusTotal failures
+
+For ClamAV TCP, check port 3310 and INSTREAM responses; for HTTP, check `/version` and `/scan`. For YARA, inspect the binary, rule permissions and exit codes. For VirusTotal, inspect rate limits, analysis state and callback timestamps.
+
+When callback signature verification fails, verify the raw body, secret and clock synchronisation. Never restore service by disabling signature verification.
+
+## Duplicate or dead-letter webhooks
+
+Duplicates are normal after timeouts and must be deduplicated by idempotency key. Dead letters mean retries were exhausted. Inspect status, body, TLS, DNS and destination timeout before manual redelivery.
+
+HTTP 200 does not imply business success. Receivers should persist quickly, return 2xx and process heavy work asynchronously.
+
+## Audit chain verification fails
+
+Check for manual edits, replacement or partial writes, secret rotation and archive-anchor continuity. Preserve evidence instead of deleting anomalous records.
+
+If the key was disclosed and the attacker had write access, the chain may have been rebuilt. Correlate with external WORM/SIEM and host audit data.
+
+## Unhealthy deployment
+
+```bash
+kubectl describe pod -n fileexpress-dev -l app.kubernetes.io/name=fileexpress
+kubectl logs -n fileexpress-dev deploy/fileexpress
+helm status fileexpress-dev -n fileexpress-dev
+argocd app get fileexpress-dev
+```
+
+For read-only filesystem failures, inspect `/data` and `/tmp`; for PVC failures, access modes and node affinity; for probes, distinguish liveness from readiness; for VPA/PodMonitor, inspect CRDs and monitoring namespaces.
+
+## Performance degradation
+
+Separate upload, download, scan and backend latency first. Inspect P99, queues, CPU, memory, GC, disk and network. Large files should stream in chunks instead of creating multiple full-object buffers. Identify the bottleneck before reducing concurrency, which may otherwise increase queueing.

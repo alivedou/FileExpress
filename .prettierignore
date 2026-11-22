@@ -5,3 +5,6 @@ package-lock.json
 helm
 docs/.next
 test-results
+docs/out
+docs/api-docs
+docs/node_modules

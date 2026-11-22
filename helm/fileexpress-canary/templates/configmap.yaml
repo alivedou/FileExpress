@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fileexpress
+data:
+  NODE_ENV: production
+  PORT: "3000"
+  STORAGE_BACKEND: "{{ .Values.config.STORAGE_BACKEND }}"
+  STORAGE_BACKENDS: "{{ .Values.config.STORAGE_BACKENDS }}"
+  DATA_DIR: "{{ .Values.config.DATA_DIR }}"
+  MAX_CHUNK_SIZE_MB: "{{ .Values.config.MAX_CHUNK_SIZE_MB }}"
+  MAX_CONCURRENT_CHUNKS: "{{ .Values.config.MAX_CONCURRENT_CHUNKS }}"
+  UPLOAD_EXPIRY_HOURS: "{{ .Values.config.UPLOAD_EXPIRY_HOURS }}"
+  OTEL_SERVICE_NAME: "{{ .Values.config.OTEL_SERVICE_NAME }}"

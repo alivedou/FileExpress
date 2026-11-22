@@ -1,0 +1,29 @@
+image:
+  repository: ghcr.io/alivedou/fileexpress
+  tag: latest
+  pullPolicy: IfNotPresent
+secrets:
+  existingSecret: fileexpress
+config:
+  STORAGE_BACKEND: local
+  STORAGE_BACKENDS: local
+  DATA_DIR: /data
+  MAX_CHUNK_SIZE_MB: "8"
+  MAX_CONCURRENT_CHUNKS: "3"
+  UPLOAD_EXPIRY_HOURS: "24"
+  OTEL_SERVICE_NAME: fileexpress
+ingress:
+  className: nginx
+  host: files.example.com
+  tlsSecret: fileexpress-tls
+monitoring:
+  prometheusUrl: http://prometheus.monitoring.svc:9090
+persistence:
+  size: 500Gi
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi

@@ -6,7 +6,14 @@ import { temporaryDirectory } from "../../helpers";
 
 async function createManager(uploadLength = 4): Promise<{ manager: TusUploadManager; id: string }> {
   const manager = new TusUploadManager(await temporaryDirectory("tus"));
-  const session = await manager.create({ fileName: "a.txt", mimeType: "text/plain", uploadLength, tenantId: "t", expiresAt: new Date(Date.now() + 60_000).toISOString(), metadata: { filename: "a.txt" } });
+  const session = await manager.create({
+    fileName: "a.txt",
+    mimeType: "text/plain",
+    uploadLength,
+    tenantId: "t",
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    metadata: { filename: "a.txt" },
+  });
   return { manager, id: session.id };
 }
 
@@ -34,16 +41,41 @@ describe("TusUploadManager", () => {
     expect((await manager.get(id)).offset).toBe(0);
     await expect(manager.get("bad")).rejects.toMatchObject({ status: 400 });
     await expect(manager.get(crypto.randomUUID())).rejects.toMatchObject({ status: 404 });
-    await expect(manager.create({ fileName: "x", mimeType: "x", uploadLength: -1, tenantId: "t", expiresAt: new Date(Date.now() + 1000).toISOString() })).rejects.toMatchObject({ status: 400 });
-    await expect(manager.create({ fileName: "x", mimeType: "x", uploadLength: 1.5, tenantId: "t", expiresAt: new Date(Date.now() + 1000).toISOString() })).rejects.toMatchObject({ status: 400 });
+    await expect(
+      manager.create({
+        fileName: "x",
+        mimeType: "x",
+        uploadLength: -1,
+        tenantId: "t",
+        expiresAt: new Date(Date.now() + 1000).toISOString(),
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      manager.create({
+        fileName: "x",
+        mimeType: "x",
+        uploadLength: 1.5,
+        tenantId: "t",
+        expiresAt: new Date(Date.now() + 1000).toISOString(),
+      }),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it("requires a declared length and propagates stream failures", async () => {
     const manager = new TusUploadManager(await temporaryDirectory("deferred"));
-    const session = await manager.create({ fileName: "x", mimeType: "x", tenantId: "t", expiresAt: new Date(Date.now() + 1000).toISOString() });
+    const session = await manager.create({
+      fileName: "x",
+      mimeType: "x",
+      tenantId: "t",
+      expiresAt: new Date(Date.now() + 1000).toISOString(),
+    });
     await expect(manager.append(session.id, 0, Readable.from(["a"]))).rejects.toMatchObject({ status: 400 });
     const fixed = await createManager();
-    const source = new Readable({ read() { this.destroy(new Error("broken stream")); } });
+    const source = new Readable({
+      read() {
+        this.destroy(new Error("broken stream"));
+      },
+    });
     await expect(fixed.manager.append(fixed.id, 0, source)).rejects.toThrow("broken stream");
   });
 
@@ -56,7 +88,13 @@ describe("TusUploadManager", () => {
 
   it("rejects expired sessions before returning metadata", async () => {
     const manager = new TusUploadManager(await temporaryDirectory("expiry"));
-    const session = await manager.create({ fileName: "x", mimeType: "x", uploadLength: 0, tenantId: "t", expiresAt: new Date(Date.now() + 10).toISOString() });
+    const session = await manager.create({
+      fileName: "x",
+      mimeType: "x",
+      uploadLength: 0,
+      tenantId: "t",
+      expiresAt: new Date(Date.now() + 10).toISOString(),
+    });
     await new Promise((resolve) => setTimeout(resolve, 20));
     await expect(manager.get(session.id)).rejects.toMatchObject({ status: 410 });
     await expect(manager.cleanupExpired()).resolves.toEqual([session.id]);

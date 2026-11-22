@@ -1,0 +1,73 @@
+# Deployment and GitOps
+
+## Image
+
+```bash
+docker build -t fileexpress:test .
+docker run --rm -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e STORAGE_ENCRYPTION_KEY="$STORAGE_ENCRYPTION_KEY" \
+  -e WEBHOOK_SIGNING_SECRET="$WEBHOOK_SIGNING_SECRET" \
+  -e ADMIN_API_TOKEN="$ADMIN_API_TOKEN" \
+  -v fileexpress-data:/data \
+  fileexpress:test
+```
+
+The image uses a multi-stage build and a non-root user. Never place secrets in the Dockerfile, image layers or values files. Container `PORT` and the port mapping must agree.
+
+## Helm
+
+The chart includes Deployment, Service, ConfigMap, Secret reference, PVC, HPA, VPA, PodMonitor and NetworkPolicy.
+
+```bash
+helm lint helm/fileexpress
+helm template fileexpress helm/fileexpress \
+  --values helm/fileexpress/values-dev.yaml > /tmp/fileexpress.yaml
+helm upgrade --install fileexpress-dev helm/fileexpress \
+  --namespace fileexpress-dev --create-namespace \
+  --values helm/fileexpress/values-dev.yaml \
+  --set secrets.existingSecret=fileexpress-runtime \
+  --wait --timeout 10m
+```
+
+Create `fileexpress-runtime` first with at least `STORAGE_ENCRYPTION_KEY`, `WEBHOOK_SIGNING_SECRET` and `ADMIN_API_TOKEN`. Secret manifests must contain references or placeholders only.
+
+A read-only root filesystem uses writable `/data` and `/tmp` volumes. For local storage, verify PVC access modes against replica count; ReadWriteOnce cannot be shared by writers on every node.
+
+## Probes and resources
+
+Readiness checks all backends, while liveness checks only the process. HPA scales on CPU and VPA supplies resource recommendations. The VPA CRD must exist before enabling that resource; rendering Helm alone does not install it.
+
+NetworkPolicy restricts ingress and must admit the actual ingress and monitoring namespaces. Restrict egress further for S3, PostgreSQL, Kafka, Redis, OTel and scanning endpoints.
+
+## ArgoCD
+
+`argo-apps/applicationset.yaml` generates dev, staging and prod applications with automated sync and pruning. Verify destination clusters, namespaces and repository credentials before applying it.
+
+```bash
+argocd app get fileexpress-prod
+argocd app sync fileexpress-prod
+argocd app wait fileexpress-prod --health --sync
+```
+
+`Synced` only means desired state was applied, and `Healthy` does not replace business acceptance. Verify upload, download, scanning and audit separately.
+
+## Canary and rollback
+
+Production CD uses 10%→50%→100% canary steps and Helm rollback on failure. Real canary requires weighted Ingress or service mesh routing and separate workloads; changing replicas of one Deployment does not provide reliable traffic weights.
+
+Automatic rollback uses signals such as error rate above 2% from Prometheus. Missing or invalid metrics should halt rollout rather than count as success.
+
+## Supply chain
+
+CI builds multi-architecture images with SBOM and Provenance, then signs with cosign keyless. Verify digest, certificate identity and OIDC issuer before deployment; never verify only a mutable tag.
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/alivedou/FileExpress/.github/workflows/ci.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/alivedou/fileexpress@sha256:<digest>
+cosign download sbom ghcr.io/alivedou/fileexpress@sha256:<digest>
+```
+
+Verification requires real CI OIDC identity and a published image; local files alone cannot prove it.

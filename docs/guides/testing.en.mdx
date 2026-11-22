@@ -1,0 +1,55 @@
+# Testing and acceptance
+
+## Test layers
+
+| Layer       | Command                    | Dependencies                                |
+| ----------- | -------------------------- | ------------------------------------------- |
+| Unit        | `npm run test:unit`        | Node.js                                     |
+| Coverage    | `npm run test:coverage`    | Node.js and V8 coverage                     |
+| Integration | `npm run test:integration` | Docker/Testcontainers or service containers |
+| Contract    | `npm run test:contract`    | Pact                                        |
+| E2E         | `npm run test:e2e`         | Playwright Chromium                         |
+| Performance | `npm run test:performance` | k6 and a running service                    |
+| Chaos       | `npm run test:chaos`       | A fault-injectable test environment         |
+
+Fixtures live under `test/fixtures/`, with dynamic values from `@faker-js/faker`. Tests must never use production credentials or send files to real third-party endpoints.
+
+## Coverage discipline
+
+Coverage requires at least 90% lines, functions and statements, and 85% branches. Storage, upload, scanning, watermarking, DRM, webhooks, RBAC, audit and metrics require stricter module review. Excluding core directories to manufacture a number is not acceptable.
+
+Coverage is not correctness. Test failure paths, concurrency, duplicate requests, restarts, corrupt metadata, cross-tenant access and secret redaction as well.
+
+## Storage and upload cases
+
+Every backend needs empty, one-byte, large-object, mid-stream failure, duplicate-ID, missing-download, expired-presign, non-advancing-cursor, unhealthy and redaction cases.
+
+Tus covers creation, HEAD, ordered PATCH, wrong offsets, deferred length, creation-with-upload, termination and expiration. Chunks cover out-of-order concurrency, duplicate chunks, changed digest at one index, missing chunks, incorrect final digest, completion retry and restart recovery.
+
+## Security and tenant cases
+
+Scanning covers engine timeout, queue limits, malicious aggregation, non-overriding whitelist, quarantine restore and callback replay. DRM covers fail-closed defaults, CIDR, device proofs, project mismatch and counter races.
+
+Webhooks cover raw-body signatures, replay, exponential backoff, dead letters and redelivery. RBAC covers role cycles, cross-tenant query/body, project/bucket scope, expired keys and rate limits. Audit covers append, tamper detection, archive anchors and CEF escaping.
+
+## Real-service integration
+
+CI starts MinIO, PostgreSQL and ClamAV services. Testcontainers requires a Docker daemon; if unavailable, report an explicit skip or blocker rather than a pass.
+
+Integration also checks readiness after backend failure, fresh-stream failover, database rollback and scan quarantine.
+
+## E2E journey
+
+The complete journey is administrator authentication, team creation, MinIO configuration, large upload, interruption and recovery, DRM setup, scanning, verified download and watermark, webhook creation, monitoring and audit export.
+
+Generate sparse or deterministic 500 MiB data in a controlled environment rather than committing large fixtures. Recalculate SHA-256 after download instead of checking only HTTP 200.
+
+## Performance and chaos
+
+Performance uses mixed file sizes and staged load while observing throughput, P95/P99, errors, memory and handles. Targets are 1k concurrent requests for ten minutes, P99 below two seconds and zero failures. Report environment, dataset and bottlenecks when targets are missed.
+
+Chaos stops backends and scanners and injects latency or network errors to verify idempotency, retry, failover and consistency. Never run destructive injection against production or a shared development environment.
+
+## Acceptance evidence
+
+Retain command output, coverage summaries, reports, image digests, Helm/ArgoCD state and cosign verification. Missing dependencies, rejected commands and unavailable clusters must remain explicitly unverified; static files are not runtime evidence.

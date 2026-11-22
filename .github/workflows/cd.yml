@@ -1,6 +1,17 @@
 name: cd
-on: { workflow_dispatch: { inputs: { environment: { type: choice, options: [dev, staging, prod], required: true }, version: { required: true, type: string } } } }
-permissions: { contents: read, id-token: write }
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, staging, prod]
+        required: true
+      version:
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -10,17 +21,36 @@ jobs:
       - uses: azure/setup-kubectl@v4
       - uses: azure/setup-helm@v4
       - name: Configure cluster credentials
-        run: echo "${{ secrets.KUBECONFIG }}" >"$HOME/.kube/config" && chmod 600 "$HOME/.kube/config"
+        run: |
+          mkdir -p "$HOME/.kube"
+          printf '%s' "${{ secrets.KUBECONFIG }}" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
       - uses: sigstore/cosign-installer@v3
-      - run: cosign verify --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@.*" --certificate-oidc-issuer https://token.actions.githubusercontent.com ghcr.io/${{ github.repository }}:${{ inputs.version }}
-      - run: helm upgrade --install fileexpress-${{ inputs.environment }} helm/fileexpress --namespace fileexpress-${{ inputs.environment }} --create-namespace --set image.tag=${{ inputs.version }} --values helm/fileexpress/values-${{ inputs.environment }}.yaml --wait --timeout 10m
-      - if: inputs.environment == 'prod'
-        run: bash scripts/canary.sh fileexpress-prod fileexpress-prod 10 50 100
+      - name: Verify signed image
+        run: cosign verify --certificate-identity-regexp "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@.*" --certificate-oidc-issuer https://token.actions.githubusercontent.com ghcr.io/${{ github.repository }}:${{ inputs.version }}
+      - name: Select deployment model
+        id: model
+        shell: bash
+        run: |
+          if [[ "${{ inputs.environment }}" == "prod" ]]; then
+            echo "chart=helm/fileexpress-canary" >> "$GITHUB_OUTPUT"
+            echo "kind=rollout" >> "$GITHUB_OUTPUT"
+          else
+            echo "chart=helm/fileexpress" >> "$GITHUB_OUTPUT"
+            echo "kind=deployment" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Deploy Helm release
+        run: helm upgrade --install fileexpress-${{ inputs.environment }} "${{ steps.model.outputs.chart }}" --namespace fileexpress-${{ inputs.environment }} --create-namespace --set image.tag=${{ inputs.version }} --values "${{ steps.model.outputs.chart }}/values.yaml" ${{ inputs.environment != 'prod' && format('--values helm/fileexpress/values-{0}.yaml', inputs.environment) || '' }} --wait --timeout 10m
+      - name: Wait for canary analysis
+        if: inputs.environment == 'prod'
+        run: bash scripts/canary.sh fileexpress-${{ inputs.environment }}
+      - name: Wait for standard deployment
+        if: inputs.environment != 'prod'
+        run: kubectl --namespace fileexpress-${{ inputs.environment }} rollout status deploy/fileexpress --timeout=5m
       - name: Smoke test
         shell: bash
         run: |
           set -euo pipefail
-          kubectl --namespace fileexpress-${{ inputs.environment }} rollout status deploy/fileexpress --timeout=5m
           kubectl --namespace fileexpress-${{ inputs.environment }} port-forward svc/fileexpress 8080:80 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT

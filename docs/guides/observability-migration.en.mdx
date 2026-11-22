@@ -1,0 +1,61 @@
+# Observability and operations
+
+## Metrics
+
+Prometheus scrapes `/metrics`. Core metrics cover HTTP latency, upload/download throughput, storage usage, scan queue depth, active sessions and errors by type. Labels must not contain file IDs, complete URLs, pickup codes or email addresses, which would create high cardinality and leak sensitive data.
+
+Useful PromQL:
+
+```promql
+histogram_quantile(0.99, sum(rate(http_req_duration_seconds_bucket[5m])) by (le))
+rate(upload_bytes_total[5m])
+rate(download_bytes_total[5m])
+scan_queue_depth
+storage_usage_pct
+sum by (type) (rate(errors_total[5m]))
+```
+
+The Grafana JSON provides baseline panels. Multi-tenant views require controlled labels and datasource permissions; a frontend parameter must never bypass tenant isolation.
+
+## Probes
+
+- `/health/live`: process liveness without external dependencies.
+- `/health/ready`: successful initialisation and health of every enabled backend.
+- `/metrics`: Prometheus text exposition.
+
+Do not bind liveness to ClamAV, the database or cloud storage; transient dependency failures would cause unnecessary container restarts. When readiness fails, remove traffic and inspect backend details.
+
+## Logs and traces
+
+Structured logs support levels, field redaction and trace correlation. Tokens, secrets, authorisation headers and connection-string credentials are redacted. Traces can flow through an OpenTelemetry Collector to Jaeger or Tempo, and logs can aggregate in Loki.
+
+Upload, download and scanning should share correlation context. Balance sampling between diagnosis and cost, and never log file contents by default in production.
+
+## Alerts
+
+Default rules cover disk usage above 80%, scan queues above 100, error rates above 5%, P99 above five seconds and unavailable backends. Alerts include durations, recovery, history and silences.
+
+Alertmanager handles grouping, inhibition and routing. A silence suppresses notification; it must not change metrics or mark an incident as recovered.
+
+## Operations commands
+
+```bash
+make dev
+make test
+make build
+make lint
+make docs
+make migrate
+make seed
+make benchmark
+```
+
+Use `seed` only in local and test environments, never against production data. Migrations inspect state and use transactional, idempotent records. Back up before rollback.
+
+## Multi-replica considerations
+
+Local JSON catalogs, process-local rate limits, the in-memory event bus and DRM view counters are not shared consistent stores. Before horizontal scaling, adopt shared metadata, Redis/Kafka, distributed rate limits and atomic DRM counters, and verify volume semantics.
+
+## Troubleshooting order
+
+Inspect readiness and backend health first, then error rate, scan backlog and P99, and finally correlate structured logs by trace ID. Do not hide systemic failures by disabling health checks, scanning or alerts.

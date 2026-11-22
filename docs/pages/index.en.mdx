@@ -1,0 +1,17 @@
+# FileExpress enterprise file transfer
+
+FileExpress extends temporary file sharing into a multi-tenant transfer platform with local and cloud object storage, Tus and concurrent chunked uploads, asynchronous content scanning, watermarking, DRM, reliable webhooks, RBAC, signed audit chains and cloud-native operations.
+
+## Start here
+
+- [Quick start](./guides/quick-start): local setup, secret injection and the first upload.
+- [Storage backends](./guides/storage): S3, Azure, PostgreSQL BLOB and IPFS.
+- [Resumable uploads](./guides/uploads): recovery, checksums, pause and resume.
+- [Scanning and DRM](./guides/security-drm): quarantine, policies and watermark limits.
+- [Webhooks and RBAC](./guides/webhooks-rbac): reliable events and tenant authorisation.
+- [Deployment](./guides/deployment): Helm, ArgoCD, canary and rollback.
+- [API reference](/api-docs): 42 operations with request and response examples.
+
+## Security boundaries
+
+A clean scan does not prove that content is harmless. Watermarks cannot prevent photography or redistribution of authorised content, and a browser cannot truly disable screenshots. Production deployments must use independent random secrets, restrict administration networks, enable TLS and regularly verify the audit chain and recovery procedures.

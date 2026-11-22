@@ -7,14 +7,11 @@ FROM ${REGISTRY}/library/node:22-alpine AS builder
 
 WORKDIR /app
 
-# 安装必要的系统工具
-RUN apk add --no-cache libc6-compat
-
 # 复制依赖文件，利用 Docker 缓存层
 COPY package*.json ./
 
 # 安装完整依赖 (包含 devDependencies 用于前端打包和 server 编译)
-RUN npm install
+RUN npm ci
 
 # 复制项目所有文件
 COPY . .
@@ -22,6 +19,9 @@ COPY . .
 # 执行打包构建
 # 该脚本会自动执行 "vite build" 同步编译前端，并使用 esbuild 构建 "/app/dist/server.cjs" 后端
 RUN npm run build
+
+FROM builder AS test
+CMD ["npm", "run", "test:integration"]
 
 # ==========================================
 # 阶段 2: 运行阶段 (Run Stage)
@@ -44,7 +44,7 @@ RUN mkdir -p /app/local_storage && \
 COPY --chown=node:node package*.json ./
 
 # 仅安装生产运行依赖，大幅精简体积
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 # 复制打包后的编译资源 dist 整个目录
 COPY --from=builder --chown=node:node /app/dist ./dist

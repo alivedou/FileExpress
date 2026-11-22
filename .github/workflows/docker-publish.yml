@@ -5,10 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: '镜像版本号 (留空则只打 latest)'
+        description: "镜像版本号 (留空则只打 latest)"
         required: false
       push_to_registry:
-        description: '是否直接推送到 GitHub 镜像仓库 (GHCR)'
+        description: "是否直接推送到 GitHub 镜像仓库 (GHCR)"
         type: boolean
         required: true
         default: true

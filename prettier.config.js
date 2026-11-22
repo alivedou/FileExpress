@@ -4,5 +4,5 @@ export default {
   trailingComma: "all",
   printWidth: 110,
   tabWidth: 2,
-  useTabs: false
+  useTabs: false,
 };

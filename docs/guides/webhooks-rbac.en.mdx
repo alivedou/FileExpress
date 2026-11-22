@@ -1,0 +1,62 @@
+# Webhooks, teams and RBAC
+
+## Event model
+
+Core events include `file.uploaded`, `file.downloaded`, `file.expired`, `file.scanned`, `scan.completed`, `scan.threat_detected`, `scan.error`, `storage.quota_warning` and `storage.backend_failed`.
+
+Each envelope contains an ID, type, tenant, occurrence time, idempotency key and business payload. Receivers must persist idempotency keys and handle duplicates safely; at-most-once delivery is not assumed.
+
+## Signature verification
+
+Delivery uses HMAC-SHA256, a timestamp and an idempotency key. Receivers should calculate the digest over the raw request body, compare in constant time and reject requests outside the time window.
+
+```text
+X-FileExpress-Timestamp: 1767225600
+X-FileExpress-Signature: sha256=<hex-hmac>
+Idempotency-Key: <stable-event-key>
+```
+
+Do not parse and serialise JSON before verification: key order and whitespace changes can invalidate signatures. Replay protection also requires a receiver-side cache of recent idempotency keys.
+
+## Retry and dead letters
+
+Failures use bounded exponential backoff and eventually enter a dead-letter state while retaining the original event. Administrators can inspect history and redeliver manually. Redelivery still checks the original endpoint tenant and event subscription.
+
+The in-memory bus is for single-process development; Redis and Kafka adapters provide cross-process transport semantics. Validate consumer groups, acknowledgements, retries, dead letters and restart recovery in production, not just successful sends.
+
+## Built-in forwarders
+
+Slack, Discord, Feishu, DingTalk, WeCom, Telegram, email, PagerDuty and Opsgenie use provider-specific payload and authentication formats. Tokens are not copied into events or logs.
+
+Email and incident providers require additional infrastructure. A successful forward means the provider accepted a request, not that a user acknowledged or resolved the alert.
+
+## Teams and roles
+
+Teams support parent/child hierarchies, custom domains, branding and quota inheritance. Built-in roles are Owner, Admin, Member, Viewer and Guest. Custom roles can inherit permissions but cannot contain cycles or override built-ins.
+
+Permission granularity:
+
+- `storage.read`, `storage.write`, `storage.delete`
+- `settings.manage`, `webhook.manage`
+- `audit.read`, `team.manage`, `billing.view`
+
+Access is denied for tenant, project or bucket mismatches, invalid time windows and missing role permissions.
+
+## API keys
+
+The complete secret is returned only at issuance; the service stores its SHA-256 hash. Scope contains tenant, optional project and bucket, permissions, per-minute rate and validity window.
+
+```http
+X-API-Key: fe_<secret>
+X-Tenant-Id: team-a
+X-Project-Id: project-b
+X-Storage-Bucket: uploads
+```
+
+Tenant values in headers, query and body must match so the authenticated tenant cannot differ from the target resource. Revocation also verifies key ownership by tenant.
+
+## Administrative authentication
+
+`ADMIN_API_TOKEN` is a controlled operations channel, not a multi-tenant user login system. API keys use separate permission middleware. Production should place administration behind an identity-aware proxy or VPN with short-lived credentials and complete login auditing.
+
+Administrative mutations are audited by the server; clients cannot forge arbitrary audit records through the administration API. Audit export supports JSON/JSONL and CEF. Chain verification detects tampering but does not replace external WORM storage.

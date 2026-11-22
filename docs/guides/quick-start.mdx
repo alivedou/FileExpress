@@ -1,15 +1,69 @@
-# 快速开始 / Quick start
+# 快速开始
 
-## 中文
+## 环境要求
 
-复制 `.env.example` 为受 Secret 管理的环境配置，执行 `npm ci && npm run dev`。小文件沿用原接口；超过 100 MiB 的文件使用 `/api/upload/chunks` 或 Tus 1.0.0。 readiness 位于 `/health/ready`。
+- Node.js 20 或更高版本。
+- npm 10 或更高版本。
+- 本地开发至少 512 MiB 可用内存。
+- 生产环境需要独立的加密密钥、Webhook 签名密钥和管理员令牌。
 
-## English
-
-Inject values from `.env.example` through your secret manager and run `npm ci && npm run dev`. Files over 100 MiB use `/api/upload/chunks` or Tus 1.0.0. Readiness is available at `/health/ready`.
+## 安装与启动
 
 ```bash
-curl -X POST http://localhost:3000/api/upload/chunks \
-  -H 'Content-Type: application/json' \
-  -d '{"fileName":"video.mp4","totalSize":524288000,"chunkSize":8388608}'
+npm install
+cp .env.example .env
+npm run dev
 ```
+
+开发服务默认监听 `0.0.0.0:3000`。不要直接把 `.env` 提交到仓库；生产环境应使用 Kubernetes Secret、GitHub Secret 或云平台密钥管理器。
+
+最小生产配置如下：
+
+```dotenv
+NODE_ENV=production
+DATA_DIR=/data
+STORAGE_BACKEND=local
+STORAGE_ENCRYPTION_KEY=<至少32字符的随机密钥>
+WEBHOOK_SIGNING_SECRET=<另一条独立随机密钥>
+ADMIN_API_TOKEN=<高熵管理员令牌>
+```
+
+缺少生产密钥时服务会拒绝启动。开发模式未提供旧接口加密密钥时使用进程随机值，重启后旧的小文件无法解密，因此开发环境也应固定注入密钥。
+
+## 第一次上传
+
+小于 100 MiB 的私密文件可以继续使用兼容接口：
+
+```bash
+curl -X POST http://localhost:3000/api/upload/private \
+  -F 'files=@./README.md' \
+  -F 'duration=24' \
+  -F 'maxDownloads=5'
+```
+
+响应包含六位 `pickupCode`。先调用 `/api/extract` 获取文件信息，再使用 `/api/download/{code}` 下载。大文件必须通过 Tus 或分片接口完成，完成响应中的提取码由持久化目录生成。
+
+## 管理端
+
+访问 `/admin`，输入管理员令牌。存储、扫描、DRM、Webhook、团队、角色、审计和监控页面都调用 `/api/admin/*`。API Key 客户端还需要 `X-Tenant-Id`，并可附带 `X-Project-Id` 与 `X-Storage-Bucket`。
+
+## 启动验证
+
+```bash
+curl --fail http://localhost:3000/health/live
+curl --fail http://localhost:3000/health/ready
+curl --fail http://localhost:3000/metrics
+npm run typecheck
+npm run lint
+npm run test:coverage
+npm run build
+```
+
+`ready` 只有在所有已启用后端健康时才返回 200。依赖不可用时返回 503，编排系统不会继续路由流量。
+
+## 下一步
+
+- 配置 [对象存储](./storage)。
+- 实现 [大文件恢复](./uploads)。
+- 配置 [团队授权](./webhooks-rbac)。
+- 按 [部署指南](./deployment) 接入 Kubernetes。

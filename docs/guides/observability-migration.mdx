@@ -1,5 +1,61 @@
-# 可观测性与运维 / Observability and operations
+# 可观测性与运维
 
-Prometheus 抓取 `/metrics`，Kubernetes 使用 `/health/live` 与 `/health/ready`。默认告警包括磁盘、扫描积压、错误率、P99 延迟和后端不可用。Trace 导出器可接 OpenTelemetry Collector，再转发 Jaeger/Tempo；结构化日志可接 Loki。
+## 指标
 
-Use `make migrate seed benchmark docs` for local operations. Helm values provide HPA, VPA, PodMonitor and NetworkPolicy. ArgoCD ApplicationSets manage dev/staging/prod. Canary analysis requires real Prometheus and ingress metrics; never mark a rollout healthy from static manifests alone.
+Prometheus 抓取 `/metrics`。核心指标覆盖 HTTP 延迟、上传下载吞吐、存储使用率、扫描队列、活跃会话和按类型错误。标签设计应避免把文件 ID、完整 URL、提取码或用户邮箱作为指标标签，防止高基数和敏感信息泄露。
+
+常用 PromQL：
+
+```promql
+histogram_quantile(0.99, sum(rate(http_req_duration_seconds_bucket[5m])) by (le))
+rate(upload_bytes_total[5m])
+rate(download_bytes_total[5m])
+scan_queue_depth
+storage_usage_pct
+sum by (type) (rate(errors_total[5m]))
+```
+
+Grafana JSON 提供基础面板。多租户视图应使用受控标签和数据源权限，不应让前端参数绕过租户隔离。
+
+## 探针
+
+- `/health/live`：进程存活，不依赖外部服务。
+- `/health/ready`：初始化成功且所有启用后端健康。
+- `/metrics`：Prometheus 文本格式。
+
+不要把 liveness 绑定到 ClamAV、数据库或云存储，否则短暂依赖故障会触发不必要的容器重启。readiness 失败时应摘流量并检查后端详情。
+
+## 日志与追踪
+
+结构化日志支持级别、字段脱敏和 trace 关联。`token`、`secret`、授权头、连接串凭据等敏感字段应被遮蔽。追踪可导出到 OpenTelemetry Collector，再进入 Jaeger 或 Tempo；日志可聚合到 Loki。
+
+上传、下载和扫描应共享关联上下文。采样率需要在故障诊断和成本之间平衡，不要默认在生产环境记录文件内容。
+
+## 告警
+
+默认规则包括磁盘超过 80%、扫描队列超过 100、错误率超过 5%、P99 超过 5 秒和后端不可用。告警具有持续时间、恢复、历史和静默管理。
+
+Alertmanager 负责分组、抑制和路由。静默只抑制通知，不应修改实际指标或把故障标记为已恢复。
+
+## 运维命令
+
+```bash
+make dev
+make test
+make build
+make lint
+make docs
+make migrate
+make seed
+make benchmark
+```
+
+`seed` 仅用于本地和测试环境，禁止在生产数据库执行。迁移脚本先检查状态并使用事务和幂等记录；回滚前必须备份。
+
+## 多副本注意事项
+
+本地 JSON 目录、进程内限流、内存事件总线和 DRM 视图计数不是共享一致性存储。水平扩容前应切换到共享元数据、Redis/Kafka、共享速率限制和原子 DRM 计数，并验证本地卷语义。
+
+## 故障排查顺序
+
+先看 readiness 和后端健康，再看错误率、扫描积压和 P99，最后通过 trace ID 关联结构化日志。不要通过关闭健康检查、扫描或告警来掩盖系统性故障。

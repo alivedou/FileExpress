@@ -1,0 +1,61 @@
+# Authentication and authorisation
+
+## Access channels
+
+Public sharing and six-digit pickup codes form the anonymous compatibility channel; enterprise administration is a separate controlled channel. A pickup code is not a user identity and must never authenticate an administration request.
+
+Administration supports two credential types:
+
+1. `Authorization: Bearer <ADMIN_API_TOKEN>` for controlled administrators.
+2. `X-API-Key: fe_*` for service accounts scoped by tenant, permission, time window and request rate.
+
+The administrator channel does not open automatically when its production token is absent. The development default is for local work only and must not be copied into a deployment.
+
+## API key lifecycle
+
+At issuance, set a name, tenant, permissions, per-minute limit and expiration. The complete secret appears only in the creation response. List responses contain the prefix, scope and revocation state, never the hash.
+
+```json
+{
+  "name": "upload-automation",
+  "scope": {
+    "tenantId": "team-a",
+    "projectId": "project-b",
+    "bucket": "uploads",
+    "permissions": ["storage.write"],
+    "requestsPerMinute": 60,
+    "notBefore": "2026-11-22T00:00:00.000Z",
+    "expiresAt": "2027-01-01T00:00:00.000Z"
+  }
+}
+```
+
+Revocation immediately rejects authentication and clears the rate window. Rotate periodically: issue the new key, migrate callers, verify traffic and only then revoke the old key.
+
+## Permission mapping
+
+- Storage reads: `storage.read`
+- Uploads and security scans: `storage.write`
+- Backend registration and system settings: `settings.manage`
+- Webhook management: `webhook.manage`
+- Teams, roles and API keys: `team.manage`
+- Audit search and export: `audit.read`
+- Billing reads: `billing.view`
+
+Custom roles can inherit built-in or other custom roles, subject to cycle and maximum-depth checks. Authorisation also constrains tenant, project, bucket and time range.
+
+## Tenant consistency
+
+API key requests require `X-Tenant-Id`. Any tenant in query, body or nested scope must match that header. Revocation also verifies the tenant of the target key.
+
+`X-Project-Id` and `X-Storage-Bucket` narrow project and bucket access. Omitting them does not widen access for a key restricted to either dimension.
+
+## Audit and administration boundaries
+
+Administrative mutations record method, path, status, source IP, User-Agent and outcome without request secrets or file contents. Records use append-only storage and a signed chain.
+
+An administrator token is not a complete interactive login system. Enterprise login should integrate OIDC/SAML, short-lived sessions and MFA; API keys and the administrator channel do not replace those controls.
+
+## Secret safety
+
+Never store real secrets in source, images, Helm values or logs. Inject external secrets with restricted readers and TLS. After disclosure, rotate affected administrator tokens, API keys, webhook signing secrets and storage credentials together as required by impact.

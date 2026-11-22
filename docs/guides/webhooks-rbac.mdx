@@ -1,5 +1,62 @@
-# Webhook、团队与审计 / Webhooks, teams and audit
+# Webhook、团队与 RBAC
 
-Webhook 使用 `timestamp.payload` 的 HMAC-SHA256、`Idempotency-Key`、指数退避和死信重发。接收方应检查五分钟时间窗并持久化幂等键。
+## 事件模型
 
-RBAC permissions are scoped by tenant, project, bucket and time window. API keys are stored as SHA-256 hashes and have per-minute limits. Audit records form an HMAC hash chain; JSONL and CEF exports support SIEM ingestion. Export archives before applying offline retention. Built-in forwarders cover Slack, Discord, 飞书, 钉钉, 企业微信, Telegram, email, PagerDuty and Opsgenie.
+核心事件包括 `file.uploaded`、`file.downloaded`、`file.expired`、`file.scanned`、`scan.completed`、`scan.threat_detected`、`scan.error`、`storage.quota_warning` 和 `storage.backend_failed`。
+
+每个事件包含 ID、类型、租户、发生时间、幂等键和业务载荷。接收方必须保存幂等键并安全处理重复投递，不能把“至多一次”作为默认假设。
+
+## 签名验证
+
+投递使用 HMAC-SHA256、时间戳和幂等键。接收端应基于原始请求体计算摘要，使用常量时间比较，并拒绝超出时间窗的请求。
+
+```text
+X-FileExpress-Timestamp: 1767225600
+X-FileExpress-Signature: sha256=<hex-hmac>
+Idempotency-Key: <stable-event-key>
+```
+
+不要在验证前解析并重新序列化 JSON，否则键顺序和空白变化可能造成签名不一致。重放保护还需要在接收端缓存近期幂等键。
+
+## 重试与死信
+
+失败采用有界指数退避，最终进入死信并保留原始事件。管理端可查询历史并手动重发。手动重发仍验证原端点的租户和事件订阅，不会把事件转发到不匹配的端点。
+
+内存总线适合单进程开发；Redis 和 Kafka 适配器提供跨进程传输语义。生产环境必须验证消费者组、确认、重试、死信和重启恢复，而不是仅检查消息能否发送。
+
+## 内置转发器
+
+支持 Slack、Discord、飞书、钉钉、企业微信、Telegram、邮件、PagerDuty 和 Opsgenie。不同服务使用各自的 payload 结构和认证头。访问令牌不会写入事件或日志。
+
+邮件和告警平台通常需要额外基础设施。转发成功只表示提供方接受请求，不表示用户已经阅读或处理告警。
+
+## 团队与角色
+
+团队支持父子层级、自定义域、品牌配置和配额继承。内置角色为 Owner、Admin、Member、Viewer、Guest，自定义角色可以继承其他角色，但不能形成循环或覆盖内置角色。
+
+权限粒度：
+
+- `storage.read`、`storage.write`、`storage.delete`
+- `settings.manage`、`webhook.manage`
+- `audit.read`、`team.manage`、`billing.view`
+
+租户不匹配、项目不匹配、存储桶不匹配、时间窗无效或角色缺少权限时拒绝访问。
+
+## API Key
+
+API Key 只在创建时返回完整秘密，服务端保存 SHA-256 哈希。Scope 包含租户、可选项目和桶、权限、每分钟速率及有效时间窗。
+
+```http
+X-API-Key: fe_<secret>
+X-Tenant-Id: team-a
+X-Project-Id: project-b
+X-Storage-Bucket: uploads
+```
+
+认证头、query 和 body 中的租户必须一致，防止认证租户与目标资源租户不同。撤销接口也会检查密钥所属租户。
+
+## 管理认证
+
+`ADMIN_API_TOKEN` 是受控运维通道，不是多租户用户登录系统。API Key 使用独立权限中间件。生产环境应把管理端放在身份感知代理或 VPN 后，并启用短期凭据和完整登录审计。
+
+管理写操作由服务端自动追加审计记录，客户端不能通过管理 API 任意伪造审计事件。审计导出支持 JSON/JSONL 和 CEF，链验证用于发现篡改，不替代外部 WORM 存储。

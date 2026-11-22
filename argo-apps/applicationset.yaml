@@ -1,23 +1,44 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
-metadata: { name: fileexpress, namespace: argocd }
+metadata:
+  name: fileexpress
+  namespace: argocd
 spec:
+  goTemplate: true
   generators:
     - list:
         elements:
-          - { environment: dev, revision: main, autoSync: "true" }
-          - { environment: staging, revision: main, autoSync: "true" }
-          - { environment: prod, revision: stable, autoSync: "false" }
-  goTemplate: true
+          - environment: dev
+            revision: main
+            chart: helm/fileexpress
+          - environment: staging
+            revision: main
+            chart: helm/fileexpress
   template:
-    metadata: { name: 'fileexpress-{{.environment}}' }
+    metadata:
+      name: "fileexpress-{{.environment}}"
     spec:
       project: default
-      source: { repoURL: https://github.com/alivedou/FileExpress.git, targetRevision: '{{.revision}}', path: helm/fileexpress, helm: { valueFiles: ['values-{{.environment}}.yaml'] } }
-      destination: { server: https://kubernetes.default.svc, namespace: 'fileexpress-{{.environment}}' }
+      source:
+        repoURL: https://github.com/alivedou/FileExpress.git
+        targetRevision: "{{.revision}}"
+        path: "{{.chart}}"
+        helm:
+          valueFiles:
+            - "values-{{.environment}}.yaml"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "fileexpress-{{.environment}}"
       syncPolicy:
-        {{- if eq .autoSync "true" }}
-        automated: { prune: true, selfHeal: true }
-        {{- end }}
-        syncOptions: [CreateNamespace=true, PrunePropagationPolicy=foreground]
-        retry: { limit: 5, backoff: { duration: 10s, factor: 2, maxDuration: 5m } }
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m
