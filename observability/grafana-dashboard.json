@@ -1,0 +1,13 @@
+{
+  "title": "FileExpress Enterprise",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "templating": { "list": [{ "name": "tenant", "type": "query", "datasource": "Prometheus", "query": "label_values(http_req_duration_seconds_count, tenant)" }] },
+  "panels": [
+    { "id": 1, "type": "timeseries", "title": "HTTP P99", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }, "targets": [{ "expr": "histogram_quantile(0.99,sum(rate(http_req_duration_seconds_bucket[5m])) by (le))" }] },
+    { "id": 2, "type": "timeseries", "title": "Throughput", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }, "targets": [{ "expr": "rate(upload_bytes_total[5m])", "legendFormat": "upload B/s" }, { "expr": "rate(download_bytes_total[5m])", "legendFormat": "download B/s" }] },
+    { "id": 3, "type": "gauge", "title": "Storage usage", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 }, "targets": [{ "expr": "storage_usage_pct" }] },
+    { "id": 4, "type": "timeseries", "title": "Scan queue", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 }, "targets": [{ "expr": "scan_queue_depth" }] },
+    { "id": 5, "type": "timeseries", "title": "Errors by type", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 }, "targets": [{ "expr": "sum by(type) (rate(errors_total[5m]))" }] }
+  ]
+}

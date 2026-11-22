@@ -1,0 +1,20 @@
+global: { resolve_timeout: 5m }
+route:
+  receiver: fileexpress-webhook
+  group_by: [alertname, tenant, backend]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="critical"]
+      receiver: fileexpress-webhook
+      repeat_interval: 1h
+receivers:
+  - name: fileexpress-webhook
+    webhook_configs:
+      - url: http://fileexpress:3000/api/webhook/alerts
+        send_resolved: true
+inhibit_rules:
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [alertname, backend]
